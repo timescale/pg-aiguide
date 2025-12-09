@@ -3,7 +3,7 @@ name: Publish Package
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
 
 permissions:
   # Required for OIDC authentication to npm (https://docs.npmjs.com/trusted-publishers)
@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   publish:
+    name: Publish package to npm and MCP Registry
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -19,7 +20,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: "npm"
+          cache: 'npm'
 
       - name: Update npm
         run: npm install -g npm@latest
@@ -29,6 +30,25 @@ jobs:
       - run: npm run build --if-present
 
       - run: npm publish
+
+      ### Publish MCP server:
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      # Optional:
+      - name: Set version in server.json
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          jq --arg v "$VERSION" '.version = $v' server.json > server.tmp && mv server.tmp server.json
+
+      - name: Publish server to MCP Registry
+        run: ./mcp-publisher publish
+
   notify-publish:
     name: Notify Publish to Slack
     runs-on: ubuntu-latest
@@ -45,4 +65,4 @@ jobs:
             text: "@tigerdata/pg-aiguide@${{ github.ref_name }} published to npm"
             blocks:
               - type: "markdown"
-                text: "**@tigerdata/pg-aiguide@${{ github.ref_name }} published to npm**"
+                text: "**@tigerdata/pg-aiguide@${{ github.ref_name }} published to npm**\n[View on npm](https://www.npmjs.com/package/@tigerdata/pg-aiguide/v/${{ github.ref_name }}) • [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
