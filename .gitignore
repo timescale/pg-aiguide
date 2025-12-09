@@ -5,6 +5,7 @@ ingest/build
 ingest/postgres
 .idea
 .migrate
+.mcpregistry_*
 
 # Temporary files directory
 tmp/

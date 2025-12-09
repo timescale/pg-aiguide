@@ -9,7 +9,7 @@
     "type": "git",
     "url": "https://github.com/timescale/pg-aiguide"
   },
-  "mcpName": "io.github.com.timescale/pg-aiguide",
+  "mcpName": "io.github.timescale/pg-aiguide",
   "type": "module",
   "bin": {
     "pg-aiguide": "dist/index.js"
