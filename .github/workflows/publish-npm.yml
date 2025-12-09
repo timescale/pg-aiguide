@@ -3,7 +3,7 @@ name: Publish Package
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
 
 permissions:
   # Required for OIDC authentication to npm (https://docs.npmjs.com/trusted-publishers)
@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: "npm"
+          cache: 'npm'
 
       - name: Update npm
         run: npm install -g npm@latest
