@@ -263,6 +263,12 @@ class DatabaseManager:
         except Exception as e:
             raise RuntimeError(f"Failed to save chunks for page {page_id}: {e}")
 
+    def get_scraped_page_count(self):
+        """Get the number of pages scraped into the temporary tables"""
+        with self.connection.cursor() as cursor:
+            cursor.execute(SQL("SELECT COUNT(*) FROM {schema}.timescale_pages_tmp").format(schema=Identifier(schema)))
+            return cursor.fetchone()[0]
+
     def close(self):
         """Close database connection"""
         if self.connection:
@@ -1110,11 +1116,25 @@ if __name__ == "__main__":
     process.start()
 
     # Create database indexes after scraping completes
-    if args.storage_type == 'database' and not args.skip_indexes and db_manager:
+    if args.storage_type == 'database' and db_manager:
         try:
-            print("Finalizing database...")
-            db_manager.finalize()
-            print("Database finalized successfully.")
+            # Check if any pages were scraped
+            page_count = db_manager.get_scraped_page_count()
+            print(f"Scraped {page_count} pages.")
+
+            if page_count == 0:
+                print("Error: No pages were scraped. Aborting to preserve existing data.")
+                print("Check that the sitemap is accessible and the URL prefix is correct.")
+                raise SystemExit(1)
+
+            if args.skip_indexes:
+                print("Skipping database finalization (--skip-indexes flag set).")
+            else:
+                print("Finalizing database...")
+                db_manager.finalize()
+                print("Database finalized successfully.")
+        except SystemExit:
+            raise
         except Exception as e:
             print(f"Failed to finish database: {e}")
             raise SystemExit(1)
