@@ -65,4 +65,4 @@ jobs:
             text: "@tigerdata/pg-aiguide@${{ github.ref_name }} published to npm"
             blocks:
               - type: "markdown"
-                text: "**@tigerdata/pg-aiguide@${{ github.ref_name }} published to npm**"
+                text: "**@tigerdata/pg-aiguide@${{ github.ref_name }} published to npm**\n[View on npm](https://www.npmjs.com/package/@tigerdata/pg-aiguide/v/${{ github.ref_name }}) • [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
