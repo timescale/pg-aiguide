@@ -320,7 +320,7 @@ class FileManager:
 class SitemapMarkdownSpider(SitemapSpider):
     name = 'sitemap_markdown'
 
-    def __init__(self, domain=None, output_dir='scraped_docs', max_pages=None, strip_data_images=True, chunk_content=True, chunking_method='header', db_manager=None, file_manager=None, *args, **kwargs):
+    def __init__(self, domain=None, output_dir='scraped_docs', max_pages=None, strip_data_images=True, chunk_content=True, chunking_method='header', db_manager=None, file_manager=None, url_prefix=None, *args, **kwargs):
         super(SitemapMarkdownSpider, self).__init__(*args, **kwargs)
 
         if not domain:
@@ -333,6 +333,7 @@ class SitemapMarkdownSpider(SitemapSpider):
         self.should_chunk_content = chunk_content if isinstance(chunk_content, bool) else chunk_content.lower() == 'true'
         self.chunking_method = chunking_method  # 'header' or 'semantic'
         self.allowed_domains = [domain]
+        self.url_prefix = url_prefix  # e.g., '/docs' to only scrape URLs under that path
 
         # Use passed-in storage managers
         self.db_manager = db_manager
@@ -396,8 +397,14 @@ class SitemapMarkdownSpider(SitemapSpider):
                     # Handle relative URLs
                     if not sitemap_url.startswith('http'):
                         sitemap_url = urljoin(f'https://{domain}/', sitemap_url)
-                    sitemap_urls.append(sitemap_url)
-                    self.logger.info(f'Found sitemap in robots.txt: {sitemap_url}')
+                    # Filter to only include docs sitemaps if url_prefix is set
+                    if self.url_prefix:
+                        if self.url_prefix in sitemap_url:
+                            sitemap_urls.append(sitemap_url)
+                            self.logger.info(f'Found docs sitemap in robots.txt: {sitemap_url}')
+                    else:
+                        sitemap_urls.append(sitemap_url)
+                        self.logger.info(f'Found sitemap in robots.txt: {sitemap_url}')
 
         except Exception as e:
             self.logger.warning(f'Could not fetch robots.txt from {robots_url}: {e}')
@@ -409,6 +416,12 @@ class SitemapMarkdownSpider(SitemapSpider):
                 f'https://{domain}/sitemap_index.xml',
                 f'https://{domain}/sitemap.txt'
             ]
+            # If url_prefix is set, also try prefix-specific sitemaps
+            if self.url_prefix:
+                common_sitemap_locations = [
+                    f'https://{domain}{self.url_prefix}/sitemap.xml',
+                    f'https://{domain}{self.url_prefix}/sitemap-0.xml',
+                ] + common_sitemap_locations
 
             for sitemap_url in common_sitemap_locations:
                 try:
@@ -760,11 +773,17 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
             return self.chunk_markdown_content_header_based(markdown_text, url)
 
     def sitemap_filter(self, entries):
-        """Filter sitemap entries to only include HTML pages"""
+        """Filter sitemap entries to only include HTML pages under the url_prefix"""
         for entry in entries:
             # Only process HTML pages, skip images, PDFs, etc.
-            if not any(ext in entry['loc'] for ext in ['.pdf', '.jpg', '.png', '.gif', '.css', '.js', '.xml']):
-                yield entry
+            if any(ext in entry['loc'] for ext in ['.pdf', '.jpg', '.png', '.gif', '.css', '.js', '.xml']):
+                continue
+            # If url_prefix is set, only include URLs that match the prefix
+            if self.url_prefix:
+                parsed = urlparse(entry['loc'])
+                if not parsed.path.startswith(self.url_prefix):
+                    continue
+            yield entry
 
     def parse(self, response):
         """Parse each page from the sitemap"""
@@ -923,18 +942,18 @@ if __name__ == "__main__":
         description='Scrape websites using sitemaps and convert to chunked markdown for RAG applications',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''Examples:
-  %(prog)s docs.tigerdata.com
-  %(prog)s docs.tigerdata.com -o tiger_docs -m 50
-  %(prog)s docs.tigerdata.com -o semantic_docs -m 5 --chunking semantic
-  %(prog)s docs.tigerdata.com --no-chunk --no-strip-images -m 100
-  %(prog)s docs.tigerdata.com --storage-type database --database-uri postgresql://user:pass@host:5432/dbname
-  %(prog)s docs.tigerdata.com --storage-type database --chunking semantic -m 10
+  %(prog)s www.tigerdata.com
+  %(prog)s www.tigerdata.com -o tiger_docs -m 50
+  %(prog)s www.tigerdata.com -o semantic_docs -m 5 --chunking semantic
+  %(prog)s www.tigerdata.com --no-chunk --no-strip-images -m 100
+  %(prog)s www.tigerdata.com --storage-type database --database-uri postgresql://user:pass@host:5432/dbname
+  %(prog)s www.tigerdata.com --storage-type database --chunking semantic -m 10
         '''
     )
 
     # Optional arguments
     parser.add_argument('--domain', '-d',
-                       help='Domain to scrape (e.g., docs.tigerdata.com)')
+                       help='Domain to scrape (e.g., www.tigerdata.com)')
 
     parser.add_argument('-o', '--output-dir',
                        default='scraped_docs',
@@ -992,6 +1011,9 @@ if __name__ == "__main__":
                        default=4,
                        help='Maximum concurrent requests (default: 4)')
 
+    parser.add_argument('--url-prefix',
+                       help='URL path prefix to filter pages (e.g., /docs to only scrape URLs under /docs)')
+
     parser.add_argument('--log-level',
                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                        default='INFO',
@@ -1004,11 +1026,12 @@ if __name__ == "__main__":
     # Set defaults from environment variables
     parser.set_defaults(
         database_uri=os.environ.get('DB_URL', f'postgresql://{os.environ["PGUSER"]}:{os.environ['PGPASSWORD']}@{os.environ['PGHOST']}:{os.environ['PGPORT']}/{os.environ['PGDATABASE']}'),
-        domain=os.environ.get('SCRAPER_DOMAIN', 'docs.tigerdata.com'),
+        domain=os.environ.get('SCRAPER_DOMAIN', 'www.tigerdata.com'),
         max_pages=int(os.environ.get('SCRAPER_MAX_PAGES', 0)) or None,
         output_dir=os.environ.get('SCRAPER_OUTPUT_DIR', os.path.join(script_dir, 'build', 'scraped_docs')),
         chunking=os.environ.get('SCRAPER_CHUNKING_METHOD', 'header'),
-        storage_type=os.environ.get('SCRAPER_STORAGE_TYPE', 'database')
+        storage_type=os.environ.get('SCRAPER_STORAGE_TYPE', 'database'),
+        url_prefix=os.environ.get('SCRAPER_URL_PREFIX', '/docs')
     )
 
     args = parser.parse_args()
@@ -1034,6 +1057,7 @@ if __name__ == "__main__":
     })
 
     print(f"Starting scraper for {args.domain}")
+    print(f"URL prefix: {args.url_prefix or 'none (all pages)'}")
     print(f"Output directory: {args.output_dir}")
     print(f"Max pages: {args.max_pages or 'unlimited'}")
     print(f"Chunking: {'enabled' if args.chunk else 'disabled'} ({args.chunking})")
@@ -1080,7 +1104,8 @@ if __name__ == "__main__":
         chunk_content=args.chunk,
         chunking_method=args.chunking,
         db_manager=db_manager,
-        file_manager=file_manager
+        file_manager=file_manager,
+        url_prefix=args.url_prefix
     )
     process.start()
 

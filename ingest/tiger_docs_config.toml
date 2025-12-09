@@ -2,7 +2,7 @@
 # Add CSS selectors to ignore for each domain
 
 [domain_selectors]
-docs_tigerdata_com = [
+"www.tigerdata.com" = [
   "script",
   "style",
   "nav",
