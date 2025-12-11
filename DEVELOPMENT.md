@@ -18,6 +18,8 @@ cp .env.sample .env
 
 Add your OPENAI_API_KEY to be used for generating embeddings.
 
+Replace placeholders in `.env` (for example `OPENAI_API_KEY`, DB credentials, etc.) with your real values before running the server.
+
 ### Configuration Parameters
 
 The server supports disabling MCP skills through different mechanisms for each transport:
@@ -107,57 +109,61 @@ PGUSER=tsdbadmin
 PGPASSWORD=password
 ```
 
+Ensure you replace these example values with your real database credentials before running the server.
+
 ## Building the MCP Server
 
 Run `npm i` to install dependencies and build the project. Use `npm run watch` to rebuild on changes.
 
 ### Run locally (Windows PowerShell)
 
-These PowerShell commands show a minimal local workflow for Windows users. Adjust paths and secrets for your environment and DO NOT commit `.env`.
+This section provides Windows (PowerShell) specific instructions. It intentionally focuses on PowerShell syntax and common Windows gotchas. For the canonical Docker example for TimescaleDB, see the **Using Docker** section above — do not duplicate those commands here.
+
+Notes on PowerShell syntax differences:
+
+- Use backticks (`) at the end of a line for multiline commands in PowerShell.
+- Use `copy` instead of `cp` to duplicate files.
+- Run `code .env` to open `.env` in VS Code if you have it installed.
+
+Follow these steps in PowerShell (Windows 10/11):
 
 ```powershell
-# 1) copy sample env and edit
+# 1) copy sample env and edit (PowerShell)
 copy .env.sample .env
 code .env   # or use notepad .env
 
-# 2) install deps and build
+# 2) install dependencies and build
 npm install
 npm run build
 
-# 3) (optional) start a local TimescaleDB with Docker if you don't have a DB
-docker pull timescale/timescaledb-ha:pg17
-docker run -d --name pg-aiguide `
-  -e POSTGRES_PASSWORD=password `
-  -e POSTGRES_DB=tsdb `
-  -e POSTGRES_USER=tsdbadmin `
-  -p 127.0.0.1:5432:5432 `
-  timescale/timescaledb-ha:pg17
+# If the build fails on Windows due to 'shx' or permission-setting commands, either:
+#  - run the build from Git Bash or WSL, or
+#  - install shx globally: npm install -g shx
 
-# Edit .env to point at the DB (example values):
-# PGHOST=localhost
-# PGPORT=5432
-# PGDATABASE=tsdb
-# PGUSER=tsdbadmin
-# PGPASSWORD=password
+# 3) (optional) start a local TimescaleDB with Docker
+# See the 'Using Docker' section above for the canonical Docker commands.
 
-# 4) ingest docs (see ingest/README.md) - example for python-based script
+# 4) ingest docs (see ingest/README.md)
 cd ingest
+# Use Python to run ingestion scripts
 python postgres_docs.py
 cd ..
 
-# 5) run the server (stdio or http)
-npm run start       # starts dist/index.js stdio
-# or
+# 5) run the server
+# starts the server in stdio mode (useful for local tooling and desktop agents)
+npm run start
+# or start the HTTP transport
 npm run start:http
 
-# 6) run the inspector in another terminal to test
+# 6) run the inspector in another terminal to test the running server
 npm run inspector
 ```
 
-Notes:
+Additional notes:
+
 - If you plan to use embeddings, set `OPENAI_API_KEY` in `.env` before running ingestion.
-- The `build` script uses `shx` to set executable permissions on `dist/*.js`; if you see errors on Windows, ensure `shx` is installed (it's a devDependency) and try running `npm run build` from a Git Bash or WSL shell as a fallback.
-- For a faster edit loop while developing TypeScript sources, use `npm run watch` in one terminal and run the inspector or server in another.
+- The `build` script uses `shx` to set executable permissions on `dist/*.js`; on Windows this can fail silently — use Git Bash/WSL or install `shx` globally as shown above.
+- For a faster edit loop while developing TypeScript sources, run `npm run watch` in one terminal and use another terminal for running the server or the inspector.
 
 ## Loading the Database
 
