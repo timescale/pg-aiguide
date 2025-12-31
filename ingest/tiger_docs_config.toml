@@ -11,7 +11,23 @@
   ".sr-only",
   ".code-block-copy-button"
 ]
-# Add more domains as needed
+
+# PostGIS official documentation (postgis.net)
+# The manual pages use DocBook-generated HTML with specific navigation elements
+"postgis.net" = [
+  "script",
+  "style",
+  "header",                    # Navigation header with prev/next links
+  "footer",
+  ".navheader",                # DocBook navigation header table
+  ".navfooter",                # DocBook navigation footer table
+  ".toc",                      # Table of contents (can be very long)
+  ".titlepage .abstract img",  # Logo images in abstract
+  "img[src*='note.png']",      # Note/warning icons
+  "img[src*='tip.png']",       # Tip icons
+  "img[src*='warning.png']",   # Warning icons
+  "img[src*='caution.png']"    # Caution icons
+]
 
 # Default selectors applied to all domains
 [default_selectors]

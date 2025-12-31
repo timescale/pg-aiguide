@@ -20,6 +20,9 @@ THIS_DIR = Path(__file__).parent.resolve()
 load_dotenv(dotenv_path=os.path.join(THIS_DIR, "..", ".env"))
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")  # Optional: custom API endpoint
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")  # Default model
+EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))  # Default dimensions
 
 POSTGRES_DIR = THIS_DIR / "postgres"
 SMGL_DIR = POSTGRES_DIR / "doc" / "src" / "sgml"
@@ -288,7 +291,11 @@ def insert_chunk(
     page: Page,
     chunk: Chunk,
 ) -> None:
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    # Initialize OpenAI client with optional custom base URL
+    client_kwargs = {"api_key": OPENAI_API_KEY}
+    if OPENAI_BASE_URL:
+        client_kwargs["base_url"] = OPENAI_BASE_URL
+    client = openai.OpenAI(**client_kwargs)
     content = ""
     for i in range(len(chunk.header_path)):
         content += (
@@ -297,8 +304,9 @@ def insert_chunk(
     content += chunk.content
     embedding = (
         client.embeddings.create(
-            model="text-embedding-3-small",
+            model=EMBEDDING_MODEL,
             input=chunk.content,
+            dimensions=EMBEDDING_DIMENSIONS,
         )
         .data[0]
         .embedding
