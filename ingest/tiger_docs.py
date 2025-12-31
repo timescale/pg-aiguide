@@ -28,6 +28,12 @@ if not os.path.exists(os.path.join(script_dir, 'build')):
 load_dotenv(dotenv_path=os.path.join(script_dir, '..', '.env'))
 schema = 'docs'
 
+# OpenAI configuration with optional custom endpoint and model
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL')  # Optional: custom API endpoint
+EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'text-embedding-3-small')  # Default model
+EMBEDDING_DIMENSIONS = int(os.getenv('EMBEDDING_DIMENSIONS', '1536'))  # Default dimensions
+
 with open(os.path.join(script_dir, 'tiger_docs_config.toml'), 'rb') as config_fp:
     config = tomllib.load(config_fp)
     DOMAIN_SELECTORS = config['domain_selectors']
@@ -359,27 +365,35 @@ class SitemapMarkdownSpider(SitemapSpider):
     def _init_default_embedding_model(self):
         """Initialize OpenAI embedding model for database storage"""
         try:
-            if not os.getenv('OPENAI_API_KEY'):
+            if not OPENAI_API_KEY:
                 raise ValueError("OPENAI_API_KEY environment variable is required for database storage with embeddings")
 
             self.logger.info("Initializing OpenAI embedding client")
-            client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+            # Initialize client with optional custom base URL
+            client_kwargs = {"api_key": OPENAI_API_KEY}
+            if OPENAI_BASE_URL:
+                client_kwargs["base_url"] = OPENAI_BASE_URL
+                self.logger.info(f"Using custom OpenAI base URL: {OPENAI_BASE_URL}")
+            client = openai.OpenAI(**client_kwargs)
 
             # Create a simple wrapper class for the OpenAI client
             class OpenAIEmbeddingWrapper:
-                def __init__(self, client):
+                def __init__(self, client, model, dimensions):
                     self.client = client
-                    self.model = "text-embedding-3-small"
+                    self.model = model
+                    self.dimensions = dimensions
 
                 def get_text_embeddings(self, texts):
                     """Generate embeddings for a batch of texts"""
                     response = self.client.embeddings.create(
                         input=texts,
-                        model=self.model
+                        model=self.model,
+                        dimensions=self.dimensions
                     )
                     return [embedding.embedding for embedding in response.data]
 
-            return OpenAIEmbeddingWrapper(client)
+            self.logger.info(f"Using embedding model: {EMBEDDING_MODEL} (dimensions: {EMBEDDING_DIMENSIONS})")
+            return OpenAIEmbeddingWrapper(client, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS)
 
         except Exception as e:
             raise RuntimeError(f"Failed to initialize OpenAI embeddings: {e}")
@@ -1029,9 +1043,24 @@ if __name__ == "__main__":
                        default='Mozilla/5.0 (compatible; DocumentationScraper)',
                        help='User agent string')
 
+    # Build database URI from environment variables (only if all are present)
+    def build_database_uri():
+        db_url = os.environ.get('DB_URL')
+        if db_url:
+            return db_url
+        # Try to build from individual PG* environment variables
+        pg_user = os.environ.get('PGUSER')
+        pg_password = os.environ.get('PGPASSWORD')
+        pg_host = os.environ.get('PGHOST')
+        pg_port = os.environ.get('PGPORT')
+        pg_database = os.environ.get('PGDATABASE')
+        if all([pg_user, pg_password, pg_host, pg_port, pg_database]):
+            return f'postgresql://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_database}'
+        return None  # Will be validated later if database storage is selected
+
     # Set defaults from environment variables
     parser.set_defaults(
-        database_uri=os.environ.get('DB_URL', f'postgresql://{os.environ["PGUSER"]}:{os.environ['PGPASSWORD']}@{os.environ['PGHOST']}:{os.environ['PGPORT']}/{os.environ['PGDATABASE']}'),
+        database_uri=build_database_uri(),
         domain=os.environ.get('SCRAPER_DOMAIN', 'www.tigerdata.com'),
         max_pages=int(os.environ.get('SCRAPER_MAX_PAGES', 0)) or None,
         output_dir=os.environ.get('SCRAPER_OUTPUT_DIR', os.path.join(script_dir, 'build', 'scraped_docs')),
@@ -1041,6 +1070,13 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+
+    # Validate database storage requirements
+    if args.storage_type == 'database' and not args.database_uri:
+        print("Error: Database storage requires database connection configuration")
+        print("Set environment variables: DB_URL or (PGUSER, PGPASSWORD, PGHOST, PGPORT, PGDATABASE)")
+        print("Or use --storage-type file for file-based storage")
+        sys.exit(1)
 
     # Validate semantic chunking requirements
     if args.chunking == 'semantic':
@@ -1079,22 +1115,30 @@ if __name__ == "__main__":
 
     if args.storage_type == 'database':
         # Initialize embedding model for database storage (needed for both header and semantic)
-        client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        # Initialize client with optional custom base URL
+        client_kwargs = {"api_key": OPENAI_API_KEY}
+        if OPENAI_BASE_URL:
+            client_kwargs["base_url"] = OPENAI_BASE_URL
+            print(f"Using custom OpenAI base URL: {OPENAI_BASE_URL}")
+        client = openai.OpenAI(**client_kwargs)
+        print(f"Using embedding model: {EMBEDDING_MODEL} (dimensions: {EMBEDDING_DIMENSIONS})")
 
         # Create embedding wrapper
         class OpenAIEmbeddingWrapper:
-            def __init__(self, client):
+            def __init__(self, client, model, dimensions):
                 self.client = client
-                self.model = "text-embedding-3-small"
+                self.model = model
+                self.dimensions = dimensions
 
             def get_text_embeddings(self, texts):
                 response = self.client.embeddings.create(
                     input=texts,
-                    model=self.model
+                    model=self.model,
+                    dimensions=self.dimensions
                 )
                 return [embedding.embedding for embedding in response.data]
 
-        embedding_model = OpenAIEmbeddingWrapper(client)
+        embedding_model = OpenAIEmbeddingWrapper(client, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS)
         db_manager = DatabaseManager(database_uri=args.database_uri, embedding_model=embedding_model)
         db_manager.initialize()
     else:
