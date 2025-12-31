@@ -533,6 +533,14 @@ def chunk_files(conn: psycopg.Connection, version: int) -> None:
     print(f"Processed {page_count} pages.")
 
 
+def get_required_env(name: str) -> str:
+    """Get a required environment variable, raising an error if not set."""
+    value = os.environ.get(name)
+    if not value:
+        raise ValueError(f"Required environment variable {name} is not set")
+    return value
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Ingest Postgres documentation into the database."
@@ -540,9 +548,17 @@ def main():
     parser.add_argument("version", type=int, help="Postgres version to ingest")
     args = parser.parse_args()
     version = args.version
+    
+    # Validate required environment variables before proceeding
+    pg_user = get_required_env('PGUSER')
+    pg_password = get_required_env('PGPASSWORD')
+    pg_host = get_required_env('PGHOST')
+    pg_port = get_required_env('PGPORT')
+    pg_database = get_required_env('PGDATABASE')
+    
     update_repo()
     tag = get_version_tag(version)
-    db_uri = f"postgresql://{os.environ['PGUSER']}:{os.environ['PGPASSWORD']}@{os.environ['PGHOST']}:{os.environ['PGPORT']}/{os.environ['PGDATABASE']}"
+    db_uri = f"postgresql://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_database}"
     with psycopg.connect(db_uri) as conn:
         print(f"Building Postgres {version} ({tag}) documentation...")
         checkout_tag(tag)

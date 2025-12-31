@@ -387,16 +387,34 @@ class SitemapMarkdownSpider(SitemapSpider):
     def get_sitemap_urls(self, domain):
         """Get sitemap URLs from robots.txt, fallback to common locations"""
         sitemap_urls = []
+        # Maximum size for robots.txt (1MB should be more than enough)
+        MAX_ROBOTS_SIZE = 1024 * 1024
 
         # Try to get sitemaps from robots.txt
         robots_url = f'https://{domain}/robots.txt'
         try:
             self.logger.info(f'Checking robots.txt at: {robots_url}')
-            response = requests.get(robots_url, timeout=10)
+            response = requests.get(robots_url, timeout=10, stream=True)
             response.raise_for_status()
 
+            # Check content length before reading
+            content_length = response.headers.get('Content-Length')
+            if content_length and int(content_length) > MAX_ROBOTS_SIZE:
+                self.logger.warning(f'robots.txt too large ({content_length} bytes), skipping')
+                response.close()
+                raise ValueError(f'robots.txt exceeds maximum size of {MAX_ROBOTS_SIZE} bytes')
+
+            # Read with size limit
+            content = response.raw.read(MAX_ROBOTS_SIZE + 1, decode_content=True)
+            response.close()
+            if len(content) > MAX_ROBOTS_SIZE:
+                self.logger.warning(f'robots.txt too large, skipping')
+                raise ValueError(f'robots.txt exceeds maximum size of {MAX_ROBOTS_SIZE} bytes')
+
+            robots_text = content.decode('utf-8', errors='replace')
+
             # Parse robots.txt for sitemap entries
-            for line in response.text.split('\n'):
+            for line in robots_text.split('\n'):
                 line = line.strip()
                 if line.lower().startswith('sitemap:'):
                     sitemap_url = line.split(':', 1)[1].strip()
@@ -930,8 +948,8 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
 
         # Ensure filename isn't too long
         if len(safe_path) > 100:
-            # Create hash of original path and truncate
-            hash_suffix = hashlib.md5(path.encode()).hexdigest()[:8]
+            # Create hash of original path using SHA256 (cryptographically secure)
+            hash_suffix = hashlib.sha256(path.encode()).hexdigest()[:16]
             safe_path = safe_path[:80] + '_' + hash_suffix
 
         return f"{safe_path}.md"
@@ -965,9 +983,12 @@ if __name__ == "__main__":
                        default='scraped_docs',
                        help='Output directory for scraped files (default: scraped_docs)')
 
+    # Maximum allowed pages to prevent resource exhaustion
+    MAX_PAGES_LIMIT = 10000
+
     parser.add_argument('-m', '--max-pages',
                        type=int,
-                       help='Maximum number of pages to scrape (default: unlimited)')
+                       help=f'Maximum number of pages to scrape (default: unlimited, max: {MAX_PAGES_LIMIT})')
 
     parser.add_argument('--strip-images',
                        action='store_true',
