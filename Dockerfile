@@ -1,29 +1,17 @@
-FROM node:22-alpine AS builder
-
-COPY package*.json /app/
-COPY tsconfig.json /app/
-COPY src /app/src
-COPY skills /app/skills
-COPY migrations /app/migrations
-
-WORKDIR /app
-
-RUN --mount=type=cache,target=/root/.npm npm install
-
-FROM node:22-alpine AS release
-
+FROM oven/bun:1.3.5
 LABEL io.modelcontextprotocol.server.name="io.github.timescale/pg-aiguide"
 
 WORKDIR /app
 
-COPY --from=builder /app/dist /app/dist
-COPY --from=builder /app/skills /app/skills
-COPY --from=builder /app/package.json /app/package.json
-COPY --from=builder /app/package-lock.json /app/package-lock.json
-COPY --from=builder /app/migrations /app/migrations
+COPY package.json bun.lock ./
+RUN bun ci --production
+
+COPY tsconfig.json ./
+COPY src ./src
+COPY skills ./skills
+COPY migrations ./migrations
 
 ENV NODE_ENV=production
 
-RUN npm ci --ignore-scripts --omit-dev
-
-CMD ["node", "dist/index.js", "http"]
+CMD ["bun", "run", "src/index.ts", "http"]
+EXPOSE 3001

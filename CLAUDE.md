@@ -2,10 +2,9 @@
 
 ## Build, Test & Run Commands
 
-- Build: `npm run build` - Compiles TypeScript to JavaScript
-- Watch mode: `npm run watch` - Watches for changes and rebuilds automatically
-- Run server: `npm run start` - Starts the MCP server using stdio transport
-- Prepare release: `npm run prepare` - Builds the project for publishing
+- Build: `./bun run build` - Compiles TypeScript to JavaScript
+- Watch mode: `./bun run watch http` - Watches for changes and rebuilds automatically
+- Run server: `./bun run start stdio` - Starts the MCP server using stdio transport
 
 ## Code Style Guidelines
 

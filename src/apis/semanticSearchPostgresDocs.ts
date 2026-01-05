@@ -1,8 +1,8 @@
-import { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
 import { openai } from '@ai-sdk/openai';
+import type { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
 import { embed } from 'ai';
 import { z } from 'zod';
-import { ServerContext } from '../types.js';
+import type { ServerContext } from '../types.js';
 
 const inputSchema = {
   version: z

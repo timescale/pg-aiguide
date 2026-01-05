@@ -3,7 +3,7 @@ name: Publish Package
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - v*.*.*
 
 permissions:
   # Required for OIDC authentication to npm (https://docs.npmjs.com/trusted-publishers)
@@ -18,19 +18,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: 'npm'
-      - name: Update npm
-        run: npm install -g npm@latest
       - name: Install dependencies
-        run: npm ci
-      - name: Build
-        run: npm run build --if-present
+        run: ./bun ci
       - name: Publish
-        run: npm publish --access public
+        # npm 11.5.1 or newer is required for OIDC authentication
+        run: ./bun x "npm@>=11.5.1" publish
 
   publish-docker:
     name: Publish Docker Images
@@ -116,9 +108,9 @@ jobs:
             channel: ${{ secrets.SLACK_CHANNEL_ID }}
             unfurl_links: false
             unfurl_media: false
-            text: "pg-aiguide ${{ github.ref_name }} published"
+            text: pg-aiguide ${{ github.ref_name }} published
             blocks:
-              - type: "markdown"
+              - type: markdown
                 text: |
                   **pg-aiguide ${{ github.ref_name }} published**
                   [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) | [npm](https://www.npmjs.com/package/@tigerdata/pg-aiguide/v/${{ steps.version.outputs.number }}) | [mcp registry](https://registry.modelcontextprotocol.io/?q=pg-aiguide) | [ghcr.io](https://ghcr.io/timescale/pg-aiguide) | [docker.io](https://hub.docker.com/r/timescale/pg-aiguide)

@@ -1,8 +1,8 @@
+import { createHash } from 'node:crypto';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import migrate from 'migrate';
-import path from 'path';
 import { Client } from 'pg';
-import { createHash } from 'crypto';
-import { fileURLToPath } from 'url';
 import { schema } from './config.js';
 
 // Use a hash of the project name

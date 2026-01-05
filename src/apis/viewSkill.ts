@@ -1,7 +1,7 @@
-import { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
+import type { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
 import { z } from 'zod';
-import { ServerContext } from '../types.js';
 import { skills, viewSkillContent } from '../skillutils/index.js';
+import type { ServerContext } from '../types.js';
 import { parseFeatureFlags } from '../util/featureFlags.js';
 
 // Create enum schema dynamically

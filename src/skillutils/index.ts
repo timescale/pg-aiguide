@@ -1,10 +1,10 @@
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
-import { readdir, readFile } from 'fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { log, type PromptFactory } from '@tigerdata/mcp-boilerplate';
 import matter from 'gray-matter';
 import { z } from 'zod';
-import { log, type PromptFactory } from '@tigerdata/mcp-boilerplate';
-import { ServerContext } from '../types.js';
+import type { ServerContext } from '../types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // Skills directory at repo root level

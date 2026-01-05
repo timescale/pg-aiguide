@@ -27,8 +27,6 @@ export async function up() {
       ON ${schema}.timescale_chunks
       USING gin(metadata);
     `);
-  } catch (e) {
-    throw e;
   } finally {
     await client.end();
   }
@@ -51,8 +49,6 @@ export async function down() {
     await client.query(/* sql */ `
       DROP INDEX CONCURRENTLY IF EXISTS ${schema}.timescale_chunks_metadata_idx;
     `);
-  } catch (e) {
-    throw e;
   } finally {
     await client.end();
   }

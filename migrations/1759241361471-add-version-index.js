@@ -14,8 +14,6 @@ export async function up() {
       CREATE INDEX CONCURRENTLY IF NOT EXISTS postgres_pages_version_idx
       ON ${schema}.postgres_pages (version);
     `);
-  } catch (e) {
-    throw e;
   } finally {
     await client.end();
   }
@@ -29,8 +27,6 @@ export async function down() {
     await client.query(/* sql */ `
       DROP INDEX CONCURRENTLY IF EXISTS ${schema}.postgres_pages_version_idx;
     `);
-  } catch (e) {
-    throw e;
   } finally {
     await client.end();
   }

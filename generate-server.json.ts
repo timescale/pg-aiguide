@@ -1,4 +1,4 @@
-import { writeFile } from 'fs/promises';
+import { writeFile } from 'node:fs/promises';
 
 const version = process.argv[2]?.trim().replace(/^v/, '');
 if (!version) {

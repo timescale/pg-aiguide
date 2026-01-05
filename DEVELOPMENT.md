@@ -109,7 +109,7 @@ PGPASSWORD=password
 
 ## Building the MCP Server
 
-Run `npm i` to install dependencies and build the project. Use `npm run watch` to rebuild on changes.
+Run `./bun i` to install dependencies and build the project. Use `./bun run watch http` to rebuild on changes.
 
 ## Loading the Database
 
@@ -121,7 +121,7 @@ Follow the [directions in the ingest directory](/ingest/README.md) to load the d
 The MCP Inspector is a very handy to exercise the MCP server from a web-based UI.
 
 ```bash
-npm run inspector
+./bun run inspector
 ```
 
 | Field          | Value           |

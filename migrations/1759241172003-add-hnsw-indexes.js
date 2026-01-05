@@ -20,8 +20,6 @@ export async function up() {
       ON ${schema}.timescale_chunks
       USING hnsw (embedding vector_cosine_ops);
     `);
-  } catch (e) {
-    throw e;
   } finally {
     await client.end();
   }
@@ -38,8 +36,6 @@ export async function down() {
     await client.query(/* sql */ `
       DROP INDEX CONCURRENTLY IF EXISTS ${schema}.timescale_chunks_embedding_idx;
     `);
-  } catch (e) {
-    throw e;
   } finally {
     await client.end();
   }

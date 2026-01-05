@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 
 import { schema } from './config.js';
-import { ServerContext } from './types.js';
+import type { ServerContext } from './types.js';
 
 export const serverInfo = {
   name: 'pg-aiguide',
