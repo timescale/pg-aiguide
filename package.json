@@ -29,7 +29,8 @@
     "lint:fix": "eslint --fix",
     "prettier:check": "prettier --check .",
     "prettier:write": "prettier --write .",
-    "migrate": "migrate"
+    "migrate": "migrate",
+    "check:upstream-skills": "tsx scripts/check-upstream-skills.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.80",
