@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import migrate from 'migrate';
+import * as migrate from 'migrate';
 import { Client } from 'pg';
 import { schema } from './config.js';
 
