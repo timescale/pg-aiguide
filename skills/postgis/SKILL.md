@@ -3,47 +3,20 @@ name: postgis-skill
 description: PostGIS-focused SQL tips, tricks and gotchas. Use when in need of dealing with geospatial data in Postgres.
 ---
 
-## Documentation
-
-- Make sure every create statement or CTE has descriptive comment `--` in front of it.
-- Write enough comments so you can deduce what was a requirement in the future and not walk in circles.
-- Every feature needs to have comprehensive up-to-date documentation near it.
-
 ## Style
 
 - PostGIS functions follow their spelling from the manual (`st_segmentize` -> `ST_Segmentize`).
 - SQL is lowercase unless instructed otherwise.
-- Values in databases and layers should be absolute as much as possible: store "birthday" or "construction date" instead of "age".
-- Do not mix tabs and spaces in code.
-- Add empty lines between logical blocks.
-- Format the code nicely and consistently.
 - Call geometry column `geom`; geography column `geog`.
-
-## Indexing
-
-- Create brin for all columns when creating large table that will be used for ad-hoc queries.
-- If you have cache table that has a primary key, it makes sense to add values into `including` on same index for faster lookup.
 
 ## Debugging
 
-- Make sure that error messages towards developer are better than just "500 Internal server error".
 - Don't stub stuff out with insane fallbacks (like lat/lon=0) - instead make the rest of the code work around data absence and inform user.
-- SQL files should to be idempotent: drop table if exists + create table as; add some comments to make people grasp queries faster.
-- Create both "up' and "down/rollback" migration when creating new migrations for ease of iteration.
 - Check `select postgis_full_version();` to see if all upgrades happened successfully.
-- Don't run one SQL file from other SQL file - this quickly becomes a mess with relative file paths.
 
 ## Raster
 
 - Do not work with GDAL on the filesystem. Import things into database and deal with data there.
-
-## SQL gotchas
-
-- `sum(case when A then 1 else 0 end)` is just `count() filter (where A)`
-- `row_number() ...  = 1` can likely be redone as `order by + limit 1` (possibly with `distinct on` or `lateral`)
-- `exists(select 1 from ...)` is just `exists(select from ...)`
-- `tags ->> 'key' = 'value'` is just `tags @> '{"key": "value"}` - works faster for indexes
-- you can't just create ordered table and then rely on it to be ordered on scan without `order by`
 
 ## PostGIS gotchas
 
