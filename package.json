@@ -20,7 +20,7 @@
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
     "inspector": "./bun x @modelcontextprotocol/inspector",
-    "lint": "./bun x @biomejs/biome check",
+    "lint": "biome check",
     "migrate": "migrate",
     "prepublishOnly": "./bun run build",
     "start": "./bun src/index.ts",
