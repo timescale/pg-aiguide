@@ -1,0 +1,11 @@
+{
+  "postgis": {
+    "source_url": "https://gitea.osgeo.org/postgis/postgis/raw/branch/master/doc/SKILL.md",
+    "pinned_commit": "2cdf739b02ec00ff6b784e15ed8d3d87bf3f788f",
+    "pinned_url": "https://gitea.osgeo.org/postgis/postgis/raw/commit/2cdf739b02ec00ff6b784e15ed8d3d87bf3f788f/doc/SKILL.md",
+    "local_path": "skills/postgis/SKILL.md",
+    "author": "Darafei Praliaskouski",
+    "author_url": "https://gitea.osgeo.org/komzpa",
+    "thanks": "Thank you to Darafei Praliaskouski for creating and maintaining the PostGIS SKILL.md guide."
+  }
+}
