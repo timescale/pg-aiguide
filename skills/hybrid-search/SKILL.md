@@ -1,0 +1,224 @@
+---
+name: hybrid-text-search
+description: Hybrid search combining BM25 keyword search (pg_textsearch) with semantic search (pgvector) using RRF fusion
+---
+
+# Hybrid Text Search
+
+Hybrid search combines keyword search (BM25) with semantic search (vector embeddings) to get the best of both: exact keyword matching and meaning-based retrieval. Use Reciprocal Rank Fusion (RRF) to merge results from both methods into a single ranked list.
+
+This guide covers combining [pg_textsearch](https://github.com/timescale/pg_textsearch) (BM25) with [pgvector](https://github.com/pgvector/pgvector). Requires both extensions. For high-volume setups, filtering, or advanced pgvector tuning (binary quantization, HNSW parameters), see the **pgvector-semantic-search** skill.
+
+pg_textsearch is a new BM25 text search extension for PostgreSQL, fully open-source and available hosted on Tiger Cloud. It provides true BM25 ranking, which outperforms PostgreSQL's built-in ts_rank for both relevance and performance.
+
+## When to Use Hybrid Search
+
+- **Use hybrid** when queries mix specific terms (product names, codes, proper nouns) with conceptual intent
+- **Use semantic only** when meaning matters more than exact wording (e.g., "how to fix slow queries" should match "query optimization")
+- **Use keyword only** when exact matches are critical (e.g., error codes, SKUs, legal citations)
+
+Hybrid search typically improves recall over either method alone, at the cost of slightly more complexity.
+
+## Golden Path (Default Setup)
+
+```sql
+-- Enable extensions
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_textsearch;
+
+-- Table with both indexes
+CREATE TABLE documents (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  content TEXT NOT NULL,
+  embedding halfvec(1536) NOT NULL
+);
+
+-- BM25 index for keyword search
+CREATE INDEX ON documents USING bm25 (content) WITH (text_config = 'english');
+
+-- HNSW index for semantic search
+CREATE INDEX ON documents USING hnsw (embedding halfvec_cosine_ops);
+```
+
+### BM25 Notes
+
+- **Negative scores**: The `<@>` operator returns negative values where lower = better match. RRF uses rank position, so this doesn't affect fusion.
+- **Language config**: Change `text_config` to match your content language (e.g., `'french'`, `'german'`). See PostgreSQL text search configurations.
+- **Tuning**: BM25 has `k1` (term frequency saturation, default 1.2) and `b` (length normalization, default 0.75) parameters. Defaults work well; only tune if relevance is poor.
+  ```sql
+  CREATE INDEX ON documents USING bm25 (content) WITH (text_config = 'english', k1 = 1.5, b = 0.8);
+  ```
+- **Partitioned tables**: Each partition maintains local statistics. Scores are not directly comparable across partitions—query individual partitions when score comparability matters.
+
+## RRF Query Pattern
+
+Reciprocal Rank Fusion combines rankings from multiple searches. Each result's score is `1 / (k + rank)` where `k` is a constant (typically 60). Results are summed across searches and re-sorted.
+
+**Run both queries in parallel from your client** for lower latency, then fuse results client-side:
+
+```sql
+-- Query 1: Keyword search (BM25)
+-- $1: search text
+SELECT id, content
+FROM documents
+ORDER BY content <@> $1
+LIMIT 50;
+
+-- Query 2: Semantic search (run in parallel)
+-- $1: embedding of your search text as halfvec(1536)
+SELECT id, content
+FROM documents
+ORDER BY embedding <=> $1::halfvec(1536)
+LIMIT 50;
+```
+
+```python
+# Client-side RRF fusion (Python)
+def rrf_fusion(keyword_results, semantic_results, k=60, limit=10):
+    scores = {}
+    content_map = {}
+
+    for rank, row in enumerate(keyword_results, start=1):
+        scores[row['id']] = scores.get(row['id'], 0) + 1 / (k + rank)
+        content_map[row['id']] = row['content']
+
+    for rank, row in enumerate(semantic_results, start=1):
+        scores[row['id']] = scores.get(row['id'], 0) + 1 / (k + rank)
+        content_map[row['id']] = row['content']
+
+    sorted_ids = sorted(scores, key=scores.get, reverse=True)[:limit]
+    return [{'id': id, 'content': content_map[id], 'score': scores[id]} for id in sorted_ids]
+```
+
+```typescript
+// Client-side RRF fusion (TypeScript)
+type Row = { id: number; content: string };
+type Result = Row & { score: number };
+
+function rrfFusion(keywordResults: Row[], semanticResults: Row[], k = 60, limit = 10): Result[] {
+  const scores = new Map<number, number>();
+  const contentMap = new Map<number, string>();
+
+  keywordResults.forEach((row, i) => {
+    scores.set(row.id, (scores.get(row.id) ?? 0) + 1 / (k + i + 1));
+    contentMap.set(row.id, row.content);
+  });
+
+  semanticResults.forEach((row, i) => {
+    scores.set(row.id, (scores.get(row.id) ?? 0) + 1 / (k + i + 1));
+    contentMap.set(row.id, row.content);
+  });
+
+  return [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id, score]) => ({ id, content: contentMap.get(id)!, score }));
+}
+```
+
+### RRF Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `k` | 60 | Smoothing constant. Higher values reduce rank differences; 60 is standard |
+| Candidates per search | 50 | Higher = better recall, more work |
+| Final limit | 10 | Results returned after fusion |
+
+Increase candidates if relevant results are being missed. The k=60 constant rarely needs tuning.
+
+## Weighting Keyword vs Semantic
+
+To favor one method over another, multiply its RRF contribution:
+
+```python
+# Weight semantic search 2x higher than keyword
+keyword_weight = 1.0
+semantic_weight = 2.0
+
+for rank, row in enumerate(keyword_results, start=1):
+    scores[row['id']] = scores.get(row['id'], 0) + keyword_weight / (k + rank)
+
+for rank, row in enumerate(semantic_results, start=1):
+    scores[row['id']] = scores.get(row['id'], 0) + semantic_weight / (k + rank)
+```
+
+```typescript
+// Weight semantic search 2x higher than keyword
+const keywordWeight = 1.0;
+const semanticWeight = 2.0;
+
+keywordResults.forEach((row, i) => {
+  scores.set(row.id, (scores.get(row.id) ?? 0) + keywordWeight / (k + i + 1));
+});
+
+semanticResults.forEach((row, i) => {
+  scores.set(row.id, (scores.get(row.id) ?? 0) + semanticWeight / (k + i + 1));
+});
+```
+
+Start with equal weights (1.0 each) and adjust based on measured relevance.
+
+## Reranking with ML Models
+
+For highest quality, add a reranking step using a cross-encoder model. Cross-encoders (e.g., `cross-encoder/ms-marco-MiniLM-L-6-v2`) are more accurate than bi-encoders but too slow for initial retrieval—use them only on the candidate set.
+
+```sql
+-- Query 1: Keyword search (run in parallel)
+SELECT id, content FROM documents ORDER BY content <@> $1 LIMIT 100;
+
+-- Query 2: Semantic search (run in parallel)
+SELECT id, content FROM documents ORDER BY embedding <=> $1::halfvec(1536) LIMIT 100;
+```
+
+```python
+# 1. Fuse results with RRF (more candidates for reranking)
+candidates = rrf_fusion(keyword_results, semantic_results, limit=100)
+
+# 2. Rerank with cross-encoder
+from sentence_transformers import CrossEncoder
+reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+
+pairs = [(query_text, doc['content']) for doc in candidates]
+scores = reranker.predict(pairs)
+
+# 3. Return top 10 by reranker score
+reranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)[:10]
+```
+
+```typescript
+// 1. Fuse results with RRF (more candidates for reranking)
+const candidates = rrfFusion(keywordResults, semanticResults, 60, 100);
+
+// 2. Rerank via API (e.g., Cohere, Jina, or self-hosted service)
+const reranked = await fetch('https://api.cohere.ai/v1/rerank', {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${COHERE_API_KEY}`, 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    model: 'rerank-english-v3.0',
+    query: queryText,
+    documents: candidates.map(c => c.content),
+    top_n: 10
+  })
+}).then(r => r.json());
+
+// 3. Map back to original documents
+const results = reranked.results.map((r: { index: number }) => candidates[r.index]);
+```
+
+Reranking is optional—hybrid RRF alone significantly improves over single-method search.
+
+## Performance Considerations
+
+- **Index both columns**: BM25 index on text, HNSW index on embedding
+- **Limit candidate pools**: 50–100 candidates per method is usually sufficient
+- **Run queries in parallel**: Client-side parallelism reduces latency vs sequential execution
+- **Monitor latency**: Hybrid adds overhead; ensure both indexes fit in memory
+
+## Common Issues
+
+| Symptom | Likely Cause | Fix |
+|---------|--------------|-----|
+| Missing exact matches | Keyword search not returning them | Check BM25 index exists; verify text_config matches content language |
+| Poor semantic results | Embedding model mismatch | Ensure query embedding uses same model as stored embeddings |
+| Slow queries | Large candidate pools or missing indexes | Reduce inner LIMIT; verify both indexes exist and are used (EXPLAIN) |
+| Skewed results | One method dominating | Adjust RRF weights; verify both searches return reasonable candidates |
