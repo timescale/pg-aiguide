@@ -173,94 +173,14 @@ LIMIT 10;
 
 ## Performance by Dataset Size
 
-The guidance below describes typical configurations and tuning goals, not guaranteed performance. Actual latency and index size depend heavily on hardware, row width, cache residency, and concurrency.
+| Scale | Vectors | Config | Notes |
+|-------|---------|--------|-------|
+| Small | <100K | Defaults (`m=16`, `ef_construction=64`, `ef_search=40-80`) | Index optional but improves tail latency |
+| Medium | 100K–5M | `ef_search=100-150` | Monitor p95 latency; most common production range |
+| Large | 5M+ | `ef_search=150-300`, `ef_construction=100+` | Memory residency critical |
+| Very Large | 10M+ | Binary quantization + re-ranking | Add RAM or partition first if possible |
 
-All examples assume:
-- `halfvec` storage and indexing
-- Cosine distance
-- Read-heavy workload
-- HNSW index mostly resident in memory
-
-### Small Scale (~100K vectors)
-
-At this scale, HNSW is fast and forgiving.
-
-**Typical configuration:**
-- `m` = 16
-- `ef_construction` = 64
-- `ef_search` = 40-80
-
-**Characteristics:**
-- Index build is fast
-- Query latency is usually single-digit milliseconds
-- High recall achievable without aggressive tuning
-- Exact search may still be acceptable, but HNSW improves tail latency
-
-**Notes:**
-- Index is optional but usually beneficial
-- Quantization beyond `halfvec` is unnecessary
-
-### Medium Scale (~1M vectors)
-
-This is the most common production range.
-
-**Typical configuration:**
-- `m` = 16
-- `ef_construction` = 64-100
-- `ef_search` = 80-150
-
-**Characteristics:**
-- HNSW provides strong speed-recall tradeoff
-- Index size and memory residency start to matter
-- `ef_search` becomes the primary recall tuning knob
-
-**High-recall mode (~99%):**
-- Increase `ef_search` first
-- Consider `m` = 24 only if recall plateaus and memory allows
-
-**Notes:**
-- `halfvec` is strongly recommended
-- Monitor p95/p99 latency as data grows; rising tails often indicate memory pressure
-
-### Large Scale (10M+ vectors)
-
-At this scale, memory and cache behavior dominate performance.
-
-**Typical configuration:**
-- `m` = 16
-- `ef_construction` = 100+
-- `ef_search` = 150-300 (depending on recall target)
-
-**Characteristics:**
-- Index build time and memory footprint are significant
-- Query latency is sensitive to cache residency
-- Concurrency amplifies tail latency if the index does not fit
-
-**Decision points:**
-- If the HNSW index fits comfortably in memory: stay on `halfvec`
-- If tail latency rises while CPU is idle: the index no longer fits
-
-**Next steps when it doesn't fit:**
-- Add RAM
-- Partition or shard
-- Use binary quantization + re-ranking
-
-### Binary quantization at scale
-
-Binary quantization is an escape hatch, not a default.
-
-**Use it when:**
-- Dataset size exceeds what `halfvec` can keep resident
-- Adding RAM or partitioning is not viable
-
-**Pattern:**
-- Binary HNSW for coarse retrieval
-- Re-rank top-N candidates using `halfvec` or float vectors
-
-**Expect:**
-- Much smaller indexes
-- Faster builds
-- Lower raw recall unless re-ranking is applied
+Tune `ef_search` first for recall; only increase `m` if recall plateaus and memory allows. Under concurrency, tail latency spikes when the index doesn't fit in memory. Binary quantization is an escape hatch—prefer adding RAM or partitioning first.
 
 ## Filtering Best Practices
 
@@ -377,69 +297,3 @@ COMMIT;
 | Slow index builds | Insufficient build memory or parallelism | Increase `maintenance_work_mem` and `max_parallel_maintenance_workers`; build after bulk load |
 | Out-of-memory errors | Index too large for available RAM | Use `halfvec`, reduce index parameters, or switch to binary quantization with re-ranking |
 | Zero or missing results | NULL or zero vectors | Avoid NULL embeddings; do not use zero vectors with cosine distance |
-
-
-## Examples
-
-### Standard Embedding Table
-
-```sql
-CREATE TABLE documents (
-  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  content TEXT NOT NULL,
-  embedding halfvec(1536),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX ON documents USING hnsw (embedding halfvec_cosine_ops);
-CREATE INDEX ON documents (created_at);
-```
-
-### Large Scale Setup
-
-```sql
-CREATE TABLE embeddings (
-  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  source_id BIGINT NOT NULL,
-  embedding halfvec(1536) NOT NULL,
-  embedding_bq bit(1536) GENERATED ALWAYS AS (binary_quantize(embedding)::bit(1536)) STORED
-);
-
-SET maintenance_work_mem = '8GB';
-SET max_parallel_maintenance_workers = 7;
-
-CREATE INDEX ON embeddings USING hnsw (embedding_bq bit_hamming_ops);
-CREATE INDEX ON embeddings (source_id);
-
--- Query with re-ranking
-SET hnsw.ef_search = 800;
-WITH q AS (
-  SELECT binary_quantize($1::halfvec(1536))::bit(1536) AS qb
-)
-SELECT *
-FROM (
-  SELECT e.id, e.source_id, e.embedding
-  FROM  embeddings e, q
-  ORDER BY e.embedding_bq <~> q.qb
-  LIMIT 800
-) candidates
-ORDER BY candidates.embedding <=> $1::halfvec(1536)
-LIMIT 10;
-```
-
-### Multi-Model Embeddings
-
-```sql
-CREATE TABLE embeddings (
-  model_id BIGINT NOT NULL,
-  item_id BIGINT NOT NULL,
-  embedding vector,  -- Variable dimensions
-  PRIMARY KEY (model_id, item_id)
-);
-
--- Partial index per model with fixed dimensions (using halfvec)
-CREATE INDEX ON embeddings USING hnsw ((embedding::halfvec(1536)) halfvec_cosine_ops) 
-  WHERE model_id = 1;
-CREATE INDEX ON embeddings USING hnsw ((embedding::halfvec(768)) halfvec_cosine_ops) 
-  WHERE model_id = 2;
-```
