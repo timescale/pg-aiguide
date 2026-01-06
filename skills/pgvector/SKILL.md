@@ -3,7 +3,9 @@ name: pgvector-skill
 description: pgvector setup and best practices for semantic search with text embeddings in PostgreSQL
 ---
 
-# pgvector Setup & Configuration
+# pgvector for Semantic Search
+
+Semantic search finds content by meaning rather than exact keywords. An embedding model converts text into high-dimensional vectors, where similar meanings map to nearby points. pgvector stores these vectors in PostgreSQL and uses approximate nearest neighbor (ANN) indexes to find the closest matches quickly—scaling to millions of rows without leaving the database. Store your text alongside its embedding, then query by converting your search text to a vector and returning the rows with the smallest distance.
 
 ## Golden Path (Default Setup)
 
@@ -26,6 +28,7 @@ This setup provides a strong speed–recall tradeoff for most text-embedding wor
 - **Use cosine distance by default** (`<=>`): For non-normalized embeddings, use cosine. For unit-normalized embeddings, cosine and inner product yield identical rankings; default to cosine.
 - **Match query operator to index ops**: Index with `halfvec_cosine_ops` requires `<=>` in queries; `halfvec_l2_ops` requires `<->`; mismatched operators won't use the index.
 - **Always cast query vectors explicitly** (`$1::halfvec(N)`) to avoid implicit-cast failures in prepared statements.
+- **Always use the same embedding model for data and queries**. Similarity search only works when the model generating the vectors are the same.
 
 ## Type Rules
 
@@ -47,7 +50,7 @@ CREATE TABLE items (
 );
 CREATE INDEX ON items USING hnsw (embedding halfvec_cosine_ops);
 
--- Query
+-- Query: returns 10 closest items. $1 is the embedding of your search text.
 SELECT id, contents FROM items ORDER BY embedding <=> $1::halfvec(1536) LIMIT 10;
 ```
 
