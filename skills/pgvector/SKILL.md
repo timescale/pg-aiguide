@@ -15,7 +15,7 @@ Use this configuration unless you have a specific reason not to.
 - Embedding column data type: `halfvec(N)` where `N` is your embedding dimension (must match everywhere). Examples use 1536; replace with your dimension `N`.
 - Distance: cosine (`<=>`)
 - Index: HNSW (`m = 16`, `ef_construction = 64`). Use `halfvec_cosine_ops` and query with `<=>`.
-- Query-time recall: `SET hnsw.ef_search = 100` (default 40 gives ~95% recall; 100 gives ~98%)
+- Query-time recall: `SET hnsw.ef_search = 100` (good starting point from published benchmarks, increase for higher recall at higher latency)
 - Query pattern: `ORDER BY embedding <=> $1::halfvec(N) LIMIT k`
 
 This setup provides a strong speed–recall tradeoff for most text-embedding workloads.
@@ -30,7 +30,7 @@ This setup provides a strong speed–recall tradeoff for most text-embedding wor
 - **Use cosine distance by default** (`<=>`): For non-normalized embeddings, use cosine. For unit-normalized embeddings, cosine and inner product yield identical rankings; default to cosine.
 - **Match query operator to index ops**: Index with `halfvec_cosine_ops` requires `<=>` in queries; `halfvec_l2_ops` requires `<->`; mismatched operators won't use the index.
 - **Always cast query vectors explicitly** (`$1::halfvec(N)`) to avoid implicit-cast failures in prepared statements.
-- **Always use the same embedding model for data and queries**. Similarity search only works when the model generating the vectors are the same.
+- **Always use the same embedding model for data and queries**. Similarity search only works when the model generating the vectors is the same.
 
 ## Type Rules
 
@@ -75,15 +75,15 @@ CREATE INDEX ON items USING hnsw (embedding halfvec_cosine_ops) WITH (m = 16, ef
 |-----------|---------|-------------|
 | `m` | 16 | Max connections per layer. Higher = better recall, more memory |
 | `ef_construction` | 64 | Build-time candidate list. Higher = better graph quality, slower build |
-| `hnsw.ef_search` | 40 | Query-time candidate list. Higher = better recall, slower queries. Must be ≥ LIMIT. |
+| `hnsw.ef_search` | 40 | Query-time candidate list. Higher = better recall, slower queries. Should be ≥ LIMIT. |
 
 **ef_search tuning (rough guidelines—actual results vary by dataset):**
 
 | ef_search | Approx Recall | Relative Speed |
 |-----------|---------------|----------------|
-| 40 | ~95% | 1x (baseline) |
-| 100 | ~98% | ~2x slower |
-| 200 | ~99% | ~4x slower |
+| 40 | lower (~95% on some benchmarks) | 1x (baseline) |
+| 100 | higher  | ~2x slower |
+| 200 | very-high | ~4x slower |
 | 400 | near-exact | ~8x slower |
 
 ```sql
@@ -230,7 +230,7 @@ Trade-off: increasing `hnsw.max_scan_tuples` improves recall but can significant
 
 ### Choose the right filtering strategy
 
-**Highly selective filters (<1k-10k rows)**
+**Highly selective filters (under ~10k rows)**
 Use a B-tree index on the filter column so Postgres can prefilter before ANN.
 
 ```sql
@@ -264,7 +264,7 @@ CREATE TABLE items (
 ## Bulk Loading
 
 ```sql
--- COPY is fastest; binary format is ~2x faster but requires proper encoding
+-- COPY is fastest; binary format is faster but requires proper encoding
 -- Text format: '[0.1, 0.2, ...]'
 COPY items (contents, embedding) FROM STDIN;
 -- Binary format (if your client supports it):
@@ -278,7 +278,7 @@ CREATE INDEX ON items USING hnsw (embedding halfvec_cosine_ops);
 
 ## Maintenance
 
-- **VACUUM regularly** after updates/deletes—dead tuples remain in the HNSW graph until vacuumed
+- **VACUUM regularly** after updates/deletes—stale entries may persist until vacuumed
 - **REINDEX** if performance degrades after high churn (rebuilds the graph from scratch)
 - For write-heavy workloads with frequent deletes, consider IVFFlat or partitioning by time using hypertables
 
