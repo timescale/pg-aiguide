@@ -7,13 +7,15 @@ description: pgvector setup and best practices for semantic search with text emb
 
 Semantic search finds content by meaning rather than exact keywords. An embedding model converts text into high-dimensional vectors, where similar meanings map to nearby points. pgvector stores these vectors in PostgreSQL and uses approximate nearest neighbor (ANN) indexes to find the closest matches quickly—scaling to millions of rows without leaving the database. Store your text alongside its embedding, then query by converting your search text to a vector and returning the rows with the smallest distance.
 
+This guide covers pgvector setup and tuning—not embedding model selection or text chunking, which significantly affect search quality.
+
 ## Golden Path (Default Setup)
 
 Use this configuration unless you have a specific reason not to.
 - Embedding column data type: `halfvec(N)` where `N` is your embedding dimension (must match everywhere). Examples use 1536; replace with your dimension `N`.
 - Distance: cosine (`<=>`)
 - Index: HNSW (`m = 16`, `ef_construction = 64`). Use `halfvec_cosine_ops` and query with `<=>`.
-- Query-time recall: `SET hnsw.ef_search = 100`
+- Query-time recall: `SET hnsw.ef_search = 100` (default 40 gives ~95% recall; 100 gives ~98%)
 - Query pattern: `ORDER BY embedding <=> $1::halfvec(N) LIMIT k`
 
 This setup provides a strong speed–recall tradeoff for most text-embedding workloads.
@@ -74,7 +76,16 @@ CREATE INDEX ON items USING hnsw (embedding halfvec_cosine_ops) WITH (m = 16, ef
 |-----------|---------|-------------|
 | `m` | 16 | Max connections per layer. Higher = better recall, more memory |
 | `ef_construction` | 64 | Build-time candidate list. Higher = better graph quality, slower build |
-| `hnsw.ef_search` | 40 | Query-time candidate list. Higher = better recall, slower queries |
+| `hnsw.ef_search` | 40 | Query-time candidate list. Higher = better recall, slower queries. Must be ≥ LIMIT. |
+
+**ef_search tuning (rough guidelines—actual results vary by dataset):**
+
+| ef_search | Approx Recall | Relative Speed |
+|-----------|---------------|----------------|
+| 40 | ~95% | 1x (baseline) |
+| 100 | ~98% | ~2x slower |
+| 200 | ~99% | ~4x slower |
+| 400 | near-exact | ~8x slower |
 
 ```sql
 -- Set search parameter for session
@@ -82,7 +93,7 @@ SET hnsw.ef_search = 100;
 
 -- Set for single query
 BEGIN;
-SET LOCAL hnsw.ef_search = 200;
+SET LOCAL hnsw.ef_search = 100;
 SELECT id, contents FROM items ORDER BY embedding <=> $1::halfvec(1536) LIMIT 10;
 COMMIT;
 ```
@@ -156,6 +167,7 @@ GENERATED ALWAYS AS (binary_quantize(embedding)::bit(1536)) STORED;
 CREATE INDEX ON items USING hnsw (embedding_bq bit_hamming_ops);
 
 -- Query with re-ranking for better recall
+-- ef_search must be >= inner LIMIT to retrieve enough candidates
 SET hnsw.ef_search = 800;
 WITH q AS (
   SELECT binary_quantize($1::halfvec(1536))::bit(1536) AS qb
@@ -175,9 +187,9 @@ LIMIT 10;
 
 | Scale | Vectors | Config | Notes |
 |-------|---------|--------|-------|
-| Small | <100K | Defaults (`m=16`, `ef_construction=64`, `ef_search=40-80`) | Index optional but improves tail latency |
-| Medium | 100K–5M | `ef_search=100-150` | Monitor p95 latency; most common production range |
-| Large | 5M+ | `ef_search=150-300`, `ef_construction=100+` | Memory residency critical |
+| Small | <100K | Defaults | Index optional but improves tail latency |
+| Medium | 100K–5M | Defaults | Monitor p95 latency; most common production range |
+| Large | 5M+ | `ef_construction=100+` | Memory residency critical |
 | Very Large | 10M+ | Binary quantization + re-ranking | Add RAM or partition first if possible |
 
 Tune `ef_search` first for recall; only increase `m` if recall plateaus and memory allows. Under concurrency, tail latency spikes when the index doesn't fit in memory. Binary quantization is an escape hatch—prefer adding RAM or partitioning first.
