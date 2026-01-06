@@ -73,6 +73,13 @@ when deploying as a claude plugin (which use [agent skills ](https://www.claude.
 }
 ```
 
+The `path` parameter supports progressive disclosure of skill resources:
+
+- `SKILL.md` (default) - Main skill instructions
+- `scripts/<file>` - Executable scripts (SQL, Python, etc.)
+- `references/<file>` - Additional documentation
+- `assets/<file>` - Static resources (templates, schemas, etc.)
+
 ### Output
 
 ```jsonc
@@ -80,8 +87,12 @@ when deploying as a claude plugin (which use [agent skills ](https://www.claude.
   "name": "setup-timescaledb-hypertables",
   "path": "SKILL.md",
   "description": "Step-by-step instructions for designing table schemas and setting up TimescaleDB with hypertables, indexes, compression, retention policies, and continuous aggregates.",
-  "content": "...", // full skill content
+  "content": "...", // file content
+  "availableFiles": ["SKILL.md", "scripts/create_hypertable.sql"], // files available in this skill
+  "metadata": { "version": "1.0", "author": "..." } // optional skill metadata (nullable)
 }
 ```
+
+**Progressive Disclosure**: First retrieve the main `SKILL.md`, then check `availableFiles` to discover additional resources that can be loaded on demand.
 
 **Available Skills**: Check the MCP tool description for the current list of available skills or look in the `skills` directory.
