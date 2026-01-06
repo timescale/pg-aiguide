@@ -9,7 +9,7 @@ Hybrid search combines keyword search (BM25) with semantic search (vector embedd
 
 This guide covers combining [pg_textsearch](https://github.com/timescale/pg_textsearch) (BM25) with [pgvector](https://github.com/pgvector/pgvector). Requires both extensions. For high-volume setups, filtering, or advanced pgvector tuning (binary quantization, HNSW parameters), see the **pgvector-semantic-search** skill.
 
-pg_textsearch is a new BM25 text search extension for PostgreSQL, fully open-source and available hosted on Tiger Cloud. It provides true BM25 ranking, which outperforms PostgreSQL's built-in ts_rank for both relevance and performance. Note: pg_textsearch is currently in prerelease.
+pg_textsearch is a new BM25 text search extension for PostgreSQL, fully open-source and available hosted on Tiger Cloud as well as for self-managed deployments. It provides true BM25 ranking, which often improves relevance compared to PostgreSQL's built-in ts_rank and can offer better performance at scale. Note: pg_textsearch is currently in prerelease and not yet recommended for production use. pg_textsearch currently supports PostgreSQL 17 and 18.
 
 ## When to Use Hybrid Search
 
@@ -180,11 +180,12 @@ reranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)[:10
 ```
 
 ```typescript
+import { CohereClientV2 } from 'cohere-ai';
+
 // 1. Fuse results with RRF (more candidates for reranking)
 const candidates = rrfFusion(keywordResults, semanticResults, 60, 100);
 
 // 2. Rerank via API (example uses Cohere SDK; Jina, Voyage, and others work similarly)
-import { CohereClientV2 } from 'cohere-ai';
 const cohere = new CohereClientV2({ token: COHERE_API_KEY });
 
 const reranked = await cohere.rerank({
@@ -210,20 +211,25 @@ Reranking is optional—hybrid RRF alone significantly improves over single-meth
 ## Monitoring & Debugging
 
 ```sql
+-- Force index usage for verification (planner may prefer seqscan on small tables)
+SET enable_seqscan = off;
+
 -- Verify BM25 index is used
 EXPLAIN SELECT id, content FROM documents ORDER BY content <@> 'search text' LIMIT 10;
 -- Look for: Index Scan using ... (bm25)
 
 -- Verify HNSW index is used
-EXPLAIN SELECT id, content FROM documents ORDER BY embedding <=> $1::halfvec(1536) LIMIT 10;
+EXPLAIN SELECT id, content FROM documents ORDER BY embedding <=> '[0.1, 0.2, ...]'::halfvec(1536) LIMIT 10;
 -- Look for: Index Scan using ... (hnsw)
+
+SET enable_seqscan = on;  -- Re-enable for normal operation
 
 -- Check index sizes
 SELECT indexname, pg_size_pretty(pg_relation_size(indexname::regclass)) AS size
 FROM pg_indexes WHERE tablename = 'documents';
 ```
 
-If EXPLAIN shows sequential scans, verify indexes exist and queries use correct operators (`<@>` for BM25, `<=>` for cosine). For more pgvector debugging guidance, see the **pgvector-semantic-search** skill.
+If EXPLAIN still shows sequential scans with `enable_seqscan = off`, verify indexes exist and queries use correct operators (`<@>` for BM25, `<=>` for cosine). For more pgvector debugging guidance, see the **pgvector-semantic-search** skill.
 
 ## Common Issues
 
