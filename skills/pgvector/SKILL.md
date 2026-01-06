@@ -7,7 +7,7 @@ description: pgvector setup and best practices for semantic search with text emb
 
 Semantic search finds content by meaning rather than exact keywords. An embedding model converts text into high-dimensional vectors, where similar meanings map to nearby points. pgvector stores these vectors in PostgreSQL and uses approximate nearest neighbor (ANN) indexes to find the closest matches quickly—scaling to millions of rows without leaving the database. Store your text alongside its embedding, then query by converting your search text to a vector and returning the rows with the smallest distance.
 
-This guide covers pgvector setup and tuning—not embedding model selection or text chunking, which significantly affect search quality.
+This guide covers pgvector setup and tuning—not embedding model selection or text chunking, which significantly affect search quality. Requires pgvector 0.8.0+ for all features (`halfvec`, `binary_quantize`, iterative scan).
 
 ## Golden Path (Default Setup)
 
@@ -48,7 +48,7 @@ This setup provides a strong speed–recall tradeoff for most text-embedding wor
 CREATE TABLE items (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   contents TEXT NOT NULL,
-  embedding halfvec(1536)
+  embedding halfvec(1536) NOT NULL
 );
 CREATE INDEX ON items USING hnsw (embedding halfvec_cosine_ops);
 
@@ -116,8 +116,8 @@ Notes:
 - IVFFlat requires data to exist before index creation.
 - Recall depends on `lists` and `ivfflat.probes`; higher probes = better recall, slower queries.
 
-Starter config: 
-```
+Starter config:
+```sql
 CREATE INDEX ON items
 USING ivfflat (embedding halfvec_cosine_ops)
 WITH (lists = 1000);
@@ -151,18 +151,19 @@ If the index cannot fit in memory at this scale, use binary quantization.
 
 These are ranges, not guarantees. Validate by monitoring cache residency and p95/p99 latency under load.
 
-
 ### Binary Quantization (For Very Large Datasets)
 
 32× memory reduction. Use with re-ranking for acceptable recall.
 
 ```sql
--- Add generated column for binary quantization
-ALTER TABLE items
-ADD COLUMN embedding_bq bit(1536)
-GENERATED ALWAYS AS (binary_quantize(embedding)::bit(1536)) STORED;
+-- Table with generated column for binary quantization
+CREATE TABLE items (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  contents TEXT NOT NULL,
+  embedding halfvec(1536) NOT NULL,
+  embedding_bq bit(1536) GENERATED ALWAYS AS (binary_quantize(embedding)::bit(1536)) STORED
+);
 
--- Index the generated column
 CREATE INDEX ON items USING hnsw (embedding_bq bit_hamming_ops);
 
 -- Query with re-ranking for better recall
