@@ -1,5 +1,5 @@
 ---
-name: pgvector-skill
+name: pgvector-semantic-search
 description: pgvector setup and best practices for semantic search with text embeddings in PostgreSQL
 ---
 
@@ -183,6 +183,8 @@ ORDER BY candidates.embedding <=> $1::halfvec(1536)
 LIMIT 10;
 ```
 
+The 80× oversampling ratio (800 candidates for 10 results) is a reasonable starting point. Binary quantization loses precision, so more candidates are needed to find true nearest neighbors during re-ranking. Increase if recall is insufficient; decrease if re-ranking latency is too high.
+
 ## Performance by Dataset Size
 
 | Scale | Vectors | Config | Notes |
@@ -243,7 +245,7 @@ Use partial HNSW indexes per filter value.
 ```sql
 CREATE INDEX ON items
 USING hnsw (embedding halfvec_cosine_ops)
-WHERE category_id = 123;
+WHERE category_id = 11;
 ```
 
 **Many filter values or large datasets**
