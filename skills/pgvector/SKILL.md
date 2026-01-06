@@ -63,7 +63,6 @@ For other distance operators (L2, inner product, etc.), see the [pgvector README
 The recommended index type. Creates a multilayer navigable graph with superior speed-recall tradeoff. Can be created on empty tables (no training step required).
 
 ```sql
--- Recommended: index at half precision for smaller indexes
 CREATE INDEX ON items USING hnsw (embedding halfvec_cosine_ops);
 
 -- With tuning parameters
@@ -136,7 +135,7 @@ SET ivfflat.probes = 10;
 
 ### Guidelines for 1536-dim vectors
 
-Approximate `halfvec` capacity at `m=16`, 1536-dim:
+Approximate `halfvec` capacity at `m=16`, 1536-dim (assumes RAM mostly available for index caching):
 
 | RAM | Approx max halfvec vectors |
 |-----|----------------------------|
@@ -196,8 +195,7 @@ Tune `ef_search` first for recall; only increase `m` if recall plateaus and memo
 
 ## Filtering Best Practices
 
-Filtered vector search requires care. Depending on filter selectivity and query shape, 
-filters can cause early termination (too few rows, missing results) or increase work (latency).
+Filtered vector search requires care. Depending on filter selectivity and query shape, filters can cause early termination (too few rows, missing results) or increase work (latency).
 
 ### Iterative scan (recommended when filters are selective)
 
@@ -265,12 +263,23 @@ CREATE TABLE items (
 ## Bulk Loading
 
 ```sql
--- Use COPY for best performance
+-- COPY is fastest; binary format is ~2x faster but requires proper encoding
+-- Text format: '[0.1, 0.2, ...]'
+COPY items (contents, embedding) FROM STDIN;
+-- Binary format (if your client supports it):
 COPY items (contents, embedding) FROM STDIN WITH (FORMAT BINARY);
 
 -- Add indexes AFTER loading
+SET maintenance_work_mem = '4GB';
+SET max_parallel_maintenance_workers = 7;
 CREATE INDEX ON items USING hnsw (embedding halfvec_cosine_ops);
 ```
+
+## Maintenance
+
+- **VACUUM regularly** after updates/deletes—dead tuples remain in the HNSW graph until vacuumed
+- **REINDEX** if performance degrades after high churn (rebuilds the graph from scratch)
+- For write-heavy workloads with frequent deletes, consider IVFFlat or partitioning by time using hypertables
 
 ## Monitoring & Debugging
 
