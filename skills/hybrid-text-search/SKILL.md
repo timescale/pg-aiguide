@@ -9,7 +9,7 @@ Hybrid search combines keyword search (BM25) with semantic search (vector embedd
 
 This guide covers combining [pg_textsearch](https://github.com/timescale/pg_textsearch) (BM25) with [pgvector](https://github.com/pgvector/pgvector). Requires both extensions. For high-volume setups, filtering, or advanced pgvector tuning (binary quantization, HNSW parameters), see the **pgvector-semantic-search** skill.
 
-pg_textsearch is a new BM25 text search extension for PostgreSQL, fully open-source and available hosted on Tiger Cloud. It provides true BM25 ranking, which outperforms PostgreSQL's built-in ts_rank for both relevance and performance.
+pg_textsearch is a new BM25 text search extension for PostgreSQL, fully open-source and available hosted on Tiger Cloud. It provides true BM25 ranking, which outperforms PostgreSQL's built-in ts_rank for both relevance and performance. Note: pg_textsearch is currently in prerelease.
 
 ## When to Use Hybrid Search
 
@@ -18,6 +18,10 @@ pg_textsearch is a new BM25 text search extension for PostgreSQL, fully open-sou
 - **Use keyword only** when exact matches are critical (e.g., error codes, SKUs, legal citations)
 
 Hybrid search typically improves recall over either method alone, at the cost of slightly more complexity.
+
+## Data Preparation
+
+Chunk your documents into smaller pieces (typically 500–1000 tokens) and store each chunk with its embedding. Both BM25 and semantic search operate on the same chunks—this keeps fusion simple since you're comparing like with like.
 
 ## Golden Path (Default Setup)
 
@@ -59,17 +63,13 @@ Reciprocal Rank Fusion combines rankings from multiple searches. Each result's s
 ```sql
 -- Query 1: Keyword search (BM25)
 -- $1: search text
-SELECT id, content
-FROM documents
-ORDER BY content <@> $1
-LIMIT 50;
+SELECT id, content FROM documents ORDER BY content <@> $1 LIMIT 50;
+```
 
--- Query 2: Semantic search (run in parallel)
+```sql
+-- Query 2: Semantic search (separate query, run in parallel)
 -- $1: embedding of your search text as halfvec(1536)
-SELECT id, content
-FROM documents
-ORDER BY embedding <=> $1::halfvec(1536)
-LIMIT 50;
+SELECT id, content FROM documents ORDER BY embedding <=> $1::halfvec(1536) LIMIT 50;
 ```
 
 ```python
@@ -162,13 +162,7 @@ Start with equal weights (1.0 each) and adjust based on measured relevance.
 
 For highest quality, add a reranking step using a cross-encoder model. Cross-encoders (e.g., `cross-encoder/ms-marco-MiniLM-L-6-v2`) are more accurate than bi-encoders but too slow for initial retrieval—use them only on the candidate set.
 
-```sql
--- Query 1: Keyword search (run in parallel)
-SELECT id, content FROM documents ORDER BY content <@> $1 LIMIT 100;
-
--- Query 2: Semantic search (run in parallel)
-SELECT id, content FROM documents ORDER BY embedding <=> $1::halfvec(1536) LIMIT 100;
-```
+Run the same parallel queries as above with a higher LIMIT (e.g., 100), then:
 
 ```python
 # 1. Fuse results with RRF (more candidates for reranking)
@@ -189,20 +183,19 @@ reranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)[:10
 // 1. Fuse results with RRF (more candidates for reranking)
 const candidates = rrfFusion(keywordResults, semanticResults, 60, 100);
 
-// 2. Rerank via API (e.g., Cohere, Jina, or self-hosted service)
-const reranked = await fetch('https://api.cohere.ai/v1/rerank', {
-  method: 'POST',
-  headers: { Authorization: `Bearer ${COHERE_API_KEY}`, 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    model: 'rerank-english-v3.0',
-    query: queryText,
-    documents: candidates.map(c => c.content),
-    top_n: 10
-  })
-}).then(r => r.json());
+// 2. Rerank via API (example uses Cohere SDK; Jina, Voyage, and others work similarly)
+import { CohereClientV2 } from 'cohere-ai';
+const cohere = new CohereClientV2({ token: COHERE_API_KEY });
+
+const reranked = await cohere.rerank({
+  model: 'rerank-v3.5',
+  query: queryText,
+  documents: candidates.map(c => c.content),
+  topN: 10
+});
 
 // 3. Map back to original documents
-const results = reranked.results.map((r: { index: number }) => candidates[r.index]);
+const results = reranked.results.map(r => candidates[r.index]);
 ```
 
 Reranking is optional—hybrid RRF alone significantly improves over single-method search.
@@ -213,6 +206,24 @@ Reranking is optional—hybrid RRF alone significantly improves over single-meth
 - **Limit candidate pools**: 50–100 candidates per method is usually sufficient
 - **Run queries in parallel**: Client-side parallelism reduces latency vs sequential execution
 - **Monitor latency**: Hybrid adds overhead; ensure both indexes fit in memory
+
+## Monitoring & Debugging
+
+```sql
+-- Verify BM25 index is used
+EXPLAIN SELECT id, content FROM documents ORDER BY content <@> 'search text' LIMIT 10;
+-- Look for: Index Scan using ... (bm25)
+
+-- Verify HNSW index is used
+EXPLAIN SELECT id, content FROM documents ORDER BY embedding <=> $1::halfvec(1536) LIMIT 10;
+-- Look for: Index Scan using ... (hnsw)
+
+-- Check index sizes
+SELECT indexname, pg_size_pretty(pg_relation_size(indexname::regclass)) AS size
+FROM pg_indexes WHERE tablename = 'documents';
+```
+
+If EXPLAIN shows sequential scans, verify indexes exist and queries use correct operators (`<@>` for BM25, `<=>` for cosine). For more pgvector debugging guidance, see the **pgvector-semantic-search** skill.
 
 ## Common Issues
 
