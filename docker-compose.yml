@@ -30,6 +30,7 @@ services:
       - ./migrations:/app/migrations
       - ./src:/app/src
       - ./skills:/app/skills
+      - ./skills.yaml:/app/skills.yaml
       - ./package.json:/app/package.json
       - ./bun.lock:/app/bun.lock
       - ./tsconfig.json:/app/tsconfig.json

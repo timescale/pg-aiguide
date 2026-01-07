@@ -1,11 +1,16 @@
+import { createViewSkillToolFactory } from '@tigerdata/mcp-boilerplate/skills';
+import { parseFeatureFlags } from '../util/featureFlags.js';
 import { keywordSearchTigerDocsFactory } from './kewordSearchTigerDocs.js';
 import { semanticSearchPostgresDocsFactory } from './semanticSearchPostgresDocs.js';
 import { semanticSearchTigerDocsFactory } from './semanticSearchTigerDocs.js';
-import { viewSkillFactory } from './viewSkill.js';
 
 export const apiFactories = [
   keywordSearchTigerDocsFactory,
   semanticSearchPostgresDocsFactory,
   semanticSearchTigerDocsFactory,
-  viewSkillFactory,
+  createViewSkillToolFactory({
+    appendSkillsListToDescription: true,
+    name: 'view_skill',
+    disabled: (_, { query }) => !parseFeatureFlags(query).mcpSkillsEnabled,
+  }),
 ] as const;

@@ -2,8 +2,8 @@
 import { httpServerFactory, log } from '@tigerdata/mcp-boilerplate';
 import { apiFactories } from './apis/index.js';
 import { runMigrations } from './migrate.js';
+import { promptFactories } from './prompts/index.js';
 import { context, serverInfo } from './serverInfo.js';
-import { promptFactories } from './skillutils/index.js';
 
 log.info('starting server...');
 try {
@@ -15,7 +15,7 @@ try {
   throw error;
 }
 
-export const { registerCleanupFn } = httpServerFactory({
+export const { registerCleanupFn } = await httpServerFactory({
   ...serverInfo,
   context,
   apiFactories,

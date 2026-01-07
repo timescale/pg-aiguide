@@ -9,6 +9,7 @@ RUN bun ci --production
 COPY tsconfig.json ./
 COPY src ./src
 COPY skills ./skills
+COPY skills.yaml ./
 COPY migrations ./migrations
 
 ENV NODE_ENV=production

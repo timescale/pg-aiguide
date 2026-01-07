@@ -1,0 +1,4 @@
+---
+local: 
+  type: local_collection
+  path: ./skills
