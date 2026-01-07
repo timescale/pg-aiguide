@@ -12,7 +12,7 @@ Usage:
 """
 
 import argparse
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 import json
@@ -24,18 +24,18 @@ import psycopg
 from psycopg.sql import SQL, Identifier
 import re
 import requests
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, quote
 import tiktoken
 from typing import Optional
 import time
 
 THIS_DIR = Path(__file__).parent.resolve()
-load_dotenv(dotenv_path=os.path.join(THIS_DIR, "..", ".env"))
+load_dotenv(dotenv_path=THIS_DIR.parent / ".env")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")  # Optional: custom API endpoint
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")  # Default model
-EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))  # Default dimensions
+EMBEDDING_DIMENSIONS = 1536  # Fixed to match database schema
 BUILD_DIR = THIS_DIR / "build"
 BUILD_DIR.mkdir(exist_ok=True)
 
@@ -403,7 +403,7 @@ chunks: {len(chunks)}
         conn.execute("DROP TABLE IF EXISTS docs.postgis_chunks_tmp CASCADE")
         conn.execute("DROP TABLE IF EXISTS docs.postgis_pages_tmp CASCADE")
 
-        # 创建页面表
+        # Create pages table
         conn.execute("""
             CREATE TABLE IF NOT EXISTS docs.postgis_pages_tmp (
                 id SERIAL PRIMARY KEY,
@@ -417,7 +417,7 @@ chunks: {len(chunks)}
             )
         """)
 
-        # 创建块表
+        # Create chunks table
         conn.execute("""
             CREATE TABLE IF NOT EXISTS docs.postgis_chunks_tmp (
                 id SERIAL PRIMARY KEY,
@@ -576,7 +576,9 @@ def build_database_uri() -> Optional[str]:
     pg_database = os.environ.get("PGDATABASE")
 
     if all([pg_user, pg_password, pg_host, pg_port, pg_database]):
-        return f"postgresql://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_database}"
+        # URL-encode password to handle special characters like '@'
+        encoded_password = quote(pg_password, safe='')
+        return f"postgresql://{pg_user}:{encoded_password}@{pg_host}:{pg_port}/{pg_database}"
 
     return None
 
@@ -632,7 +634,7 @@ Examples:
 
     args = parser.parse_args()
 
-    # 验证数据库存储需求
+    # Validate database storage requirements
     db_uri = args.database_uri or build_database_uri()
     if args.storage_type == "database" and not db_uri:
         print("Error: Database storage requires database connection configuration")
