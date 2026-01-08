@@ -11,6 +11,8 @@ export const apiFactories = [
   createViewSkillToolFactory({
     appendSkillsListToDescription: true,
     name: 'view_skill',
+    description:
+      'Retrieve detailed skills for TimescaleDB operations and best practices.',
     disabled: (_, { query }) => !parseFeatureFlags(query).mcpSkillsEnabled,
   }),
 ] as const;
