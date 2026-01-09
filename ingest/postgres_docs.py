@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import tiktoken
+from urllib.parse import quote
 
 
 THIS_DIR = Path(__file__).parent.resolve()
@@ -586,7 +587,9 @@ def main():
     version = args.version
     update_repo()
     tag = get_version_tag(version)
-    db_uri = f"postgresql://{os.environ['PGUSER']}:{os.environ['PGPASSWORD']}@{os.environ['PGHOST']}:{os.environ['PGPORT']}/{os.environ['PGDATABASE']}"
+    # URL-encode password to handle special characters like '@'
+    encoded_password = quote(os.environ['PGPASSWORD'], safe='')
+    db_uri = f"postgresql://{os.environ['PGUSER']}:{encoded_password}@{os.environ['PGHOST']}:{os.environ['PGPORT']}/{os.environ['PGDATABASE']}"
     with psycopg.connect(db_uri) as conn:
         print(f"Building Postgres {version} ({tag}) documentation...")
         checkout_tag(tag)

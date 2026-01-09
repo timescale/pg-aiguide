@@ -9,7 +9,7 @@ import sys
 import argparse
 import asyncio
 import time
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, quote
 import hashlib
 import requests
 import json
@@ -1055,7 +1055,9 @@ if __name__ == "__main__":
         pg_port = os.environ.get('PGPORT')
         pg_database = os.environ.get('PGDATABASE')
         if all([pg_user, pg_password, pg_host, pg_port, pg_database]):
-            return f'postgresql://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_database}'
+            # URL-encode password to handle special characters like '@'
+            encoded_password = quote(pg_password, safe='')
+            return f'postgresql://{pg_user}:{encoded_password}@{pg_host}:{pg_port}/{pg_database}'
         return None  # Will be validated later if database storage is selected
 
     # Set defaults from environment variables
