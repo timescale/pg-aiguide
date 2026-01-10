@@ -96,6 +96,13 @@ claude plugin marketplace add timescale/pg-aiguide
 claude plugin install pg@aiguide
 ```
 
+Or install the skills with [sk](https://github.com/803/skills-supply) on any coding agent:
+
+```bash
+sk pkg add claude-plugin pg@timescale/pg-aiguide
+sk sync
+```
+
 This plugin uses the skills available in the `skills` directory as well as our
 publicly available MCP server endpoint hosted by TigerData for searching PostgreSQL documentation.
 
