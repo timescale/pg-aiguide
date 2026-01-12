@@ -111,6 +111,11 @@ def build_html() -> None:
     # /usr/local by default.
     if Path("/opt/homebrew/opt/icu4c/lib/pkgconfig").exists():
         environ["PKG_CONFIG_PATH"] = "/opt/homebrew/opt/icu4c/lib/pkgconfig"
+
+    # Shim for macOS and docbook installed via homebrew
+    if Path("/opt/homebrew/etc/xml/catalog").exists():
+        environ["XML_CATALOG_FILES"] = "/opt/homebrew/etc/xml/catalog"
+
     subprocess.run(
         "./configure --without-readline --without-zlib",
         shell=True,
@@ -125,7 +130,7 @@ def build_html() -> None:
         "make html",
         shell=True,
         check=True,
-        env=os.environ,
+        env=environ,
         text=True,
         cwd=SMGL_DIR,
     )
@@ -382,8 +387,25 @@ def process_chunk(conn: psycopg.Connection, page: Page, chunk: Chunk) -> None:
 
 
 def chunk_files(conn: psycopg.Connection, version: int) -> None:
+    # Capture index definitions before we drop/replace tables.
+    chunks_index_defs = [
+        row[0]
+        for row in conn.execute(
+            """
+            select indexdef
+            from pg_indexes
+            where schemaname = 'docs'
+            and tablename = 'postgres_chunks'
+            order by indexname
+        """
+        ).fetchall()
+    ]
+
     conn.execute("drop table if exists docs.postgres_chunks_tmp")
     conn.execute("drop table if exists docs.postgres_pages_tmp")
+
+    # Keep indexes (notably the unique id index) so that we can add a foreign key
+    # from chunks -> pages.
     conn.execute(
         "create table docs.postgres_pages_tmp (like docs.postgres_pages including all excluding constraints)"
     )
@@ -391,17 +413,25 @@ def chunk_files(conn: psycopg.Connection, version: int) -> None:
         "insert into docs.postgres_pages_tmp select * from docs.postgres_pages where version != %s",
         [version],
     )
+
+    # Do not create BM25 (or other) indexes on the temp table until all inserts
+    # are complete; BM25 indexes can error during INSERT with:
+    # `index \"..._content_idx\" not found`.
     conn.execute(
-        "create table docs.postgres_chunks_tmp (like docs.postgres_chunks including all excluding constraints)"
+        "create table docs.postgres_chunks_tmp (like docs.postgres_chunks including all excluding constraints excluding indexes)"
     )
     conn.execute(
         "insert into docs.postgres_chunks_tmp select c.* from docs.postgres_chunks c inner join docs.postgres_pages p on c.page_id = p.id where p.version != %s",
         [version],
     )
+
     conn.execute(
         "alter table docs.postgres_chunks_tmp add foreign key (page_id) references docs.postgres_pages_tmp(id) on delete cascade"
     )
     conn.commit()
+
+    # We'll recreate the saved indexes after swapping tables.
+    index_defs_to_create = chunks_index_defs
 
     # Reset the sequences for the temp tables
     conn.execute(
@@ -483,6 +513,9 @@ def chunk_files(conn: psycopg.Connection, version: int) -> None:
         cur.execute("alter table docs.postgres_chunks_tmp rename to postgres_chunks")
         cur.execute("alter table docs.postgres_pages_tmp rename to postgres_pages")
 
+        for index_def in index_defs_to_create:
+            cur.execute(index_def)
+
         # the auto create foreign key and index names include the _tmp_ bit in their
         # names, so we remove them so that they match the generated names for the
         # renamed tables.
@@ -495,7 +528,7 @@ def chunk_files(conn: psycopg.Connection, version: int) -> None:
                 and tablename = %s
                 and indexname like %s
             """,
-                [table, '%_tmp_%'],
+                [table, "%_tmp_%"],
             )
             for row in cur.fetchall():
                 old_index_name = row[0]
@@ -509,13 +542,16 @@ def chunk_files(conn: psycopg.Connection, version: int) -> None:
                     )
                 )
 
-        cur.execute("""
+        cur.execute(
+            """
             select conname
             from pg_constraint
             where conrelid = to_regclass(%s)
             and contype = 'f'
             and conname like %s
-        """, ['docs.postgres_chunks', '%_tmp_%'])
+        """,
+            ["docs.postgres_chunks", "%_tmp_%"],
+        )
         for row in cur.fetchall():
             old_fk_name = row[0]
             new_fk_name = old_fk_name.replace("_tmp_", "_")

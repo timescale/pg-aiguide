@@ -1,6 +1,6 @@
 services:
   db:
-    image: timescale/timescaledb-ha:pg17
+    image: timescale/timescaledb-ha:pg18
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
