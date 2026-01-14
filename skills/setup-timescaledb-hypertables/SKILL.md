@@ -193,7 +193,7 @@ Set `after` interval for when: data becomes mostly immutable (some updates/backf
 ```sql
 -- Only needed if you want to override the default 7-day policy created by tsdb.enable_columnstore=true
 -- Remove the existing auto-created policy first:
--- SELECT remove_columnstore_policy('your_table_name');
+-- CALL remove_columnstore_policy('your_table_name');
 -- Then add custom policy:
 -- CALL add_columnstore_policy('your_table_name', after => INTERVAL '1 day');
 ```
