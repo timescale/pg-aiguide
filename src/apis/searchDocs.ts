@@ -85,7 +85,7 @@ export const searchDocsFactory: ApiFactory<
   config: {
     title: 'Search Documentation',
     description:
-      'Search documentation using semantic (vector similarity) or keyword (BM25) search. Supports Tiger Cloud (TimescaleDB) and PostgreSQL.',
+      'Search documentation using semantic or keyword search. Supports Tiger Cloud (TimescaleDB) and PostgreSQL.',
     inputSchema,
     outputSchema,
   },
@@ -149,7 +149,6 @@ SELECT
         throw new Error(`Unsupported source: ${source.toString()}`);
       }
     } else if (search_type === 'keyword') {
-      // keyword search (BM25)
       if (source === 'tiger') {
         const result = await pgPool.query<KeywordResult>(
           /* sql */ `
