@@ -35,7 +35,7 @@ const inputSchema = {
     .describe('The maximum number of matches to return. Default is 10.'),
 } as const;
 
-const zSemanticResult = z.object({
+const zBaseResult = z.object({
   id: z
     .number()
     .int()
@@ -46,6 +46,9 @@ const zSemanticResult = z.object({
     .describe(
       'Additional metadata about the documentation entry, as a JSON encoded string.',
     ),
+});
+
+const zSemanticResult = zBaseResult.extend({
   distance: z
     .number()
     .describe(
@@ -53,17 +56,7 @@ const zSemanticResult = z.object({
     ),
 });
 
-const zKeywordResult = z.object({
-  id: z
-    .number()
-    .int()
-    .describe('The unique identifier of the documentation entry.'),
-  content: z.string().describe('The content of the documentation entry.'),
-  metadata: z
-    .string()
-    .describe(
-      'Additional metadata about the documentation entry, as a JSON encoded string.',
-    ),
+const zKeywordResult = zBaseResult.extend({
   score: z
     .number()
     .describe(
