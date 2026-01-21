@@ -186,12 +186,12 @@ CREATE TABLE ... (id BIGINT PRIMARY KEY, ...) WITH (tsdb.partition_column='id');
 
 ## Step 2: Compression Policy (Optional)
 
-**IMPORTANT**: If you used `tsdb.enable_columnstore=true` in Step 1, a columnstore policy is **automatically created** with `after => INTERVAL '7 days'`. You only need to call `add_columnstore_policy()` if you want to customize the `after` interval to something other than 7 days.
+**IMPORTANT**: If you used `tsdb.enable_columnstore=true` in Step 1, starting with TimescaleDB version 2.23 a columnstore policy is **automatically created** with `after => INTERVAL '7 days'`. You only need to call `add_columnstore_policy()` if you want to customize the `after` interval to something other than 7 days.
 
 Set `after` interval for when: data becomes mostly immutable (some updates/backfill OK) AND B-tree indexes aren't needed for queries (less common criterion).
 
 ```sql
--- Only needed if you want to override the default 7-day policy created by tsdb.enable_columnstore=true
+-- In TimescaleDB 2.23 and later only needed if you want to override the default 7-day policy created by tsdb.enable_columnstore=true
 -- Remove the existing auto-created policy first:
 -- CALL remove_columnstore_policy('your_table_name');
 -- Then add custom policy:
@@ -393,7 +393,7 @@ Only for query patterns where you ALWAYS filter by the space-partition column wi
 SELECT * FROM timescaledb_information.hypertables
 WHERE hypertable_name = 'your_table_name';
 
--- Check compression settings (use function, not view)
+-- Check compression settings
 SELECT * FROM hypertable_compression_stats('your_table_name');
 
 -- Check aggregates
@@ -459,7 +459,7 @@ ORDER BY range_start DESC;
 **Manual Compression Example:**
 
 ```sql
--- Compress a specific chunk (use CALL for procedures)
+-- Compress a specific chunk
 CALL convert_to_columnstore('_timescaledb_internal._hyper_7_1_chunk');
 
 -- Check compression statistics
