@@ -218,16 +218,13 @@ Once installed, pg-aiguide can answer Postgres questions or design schemas.
 
 ## Features
 
-### Semantic Search (MCP Tools)
+### Documentation Search (MCP Tools)
 
-- [**`semantic_search_postgres_docs`**](API.md#semantic_search_postgres_docs)
-  Performs semantic search over the official PostgreSQL manual, with results scoped to a specific Postgres version.
-
-- [**`semantic_search_tiger_docs`** ](API.md#semantic_search_tiger_docs)
-  Searches Tiger Data's documentation corpus, including TimescaleDB and future ecosystem extensions.
-
-- [**`semantic_search_postgis_docs`**](API.md#semantic_search_postgis_docs)
-  Searches the official PostGIS documentation, covering spatial database topics including geometry types, spatial functions, indexing, and GIS operations.
+- [**`search_docs`**](API.md#search_docs)
+  Unified search tool supporting semantic (vector similarity) and keyword (BM25) search across multiple documentation sources:
+  - `postgres` - Official PostgreSQL manual, scoped by version
+  - `tiger` - Tiger Data's documentation (TimescaleDB and ecosystem)
+  - `postgis` - PostGIS spatial extension documentation
 
 ### Skills (AI-Optimized Best Practices)
 
