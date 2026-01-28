@@ -208,6 +208,43 @@ Reranking is optional—hybrid RRF alone significantly improves over single-meth
 - **Run queries in parallel**: Client-side parallelism reduces latency vs sequential execution
 - **Monitor latency**: Hybrid adds overhead; ensure both indexes fit in memory
 
+## Scaling with pgvectorscale
+
+For large datasets (10M+ vectors) or workloads with selective metadata filters, consider [pgvectorscale](https://github.com/timescale/pgvectorscale)'s StreamingDiskANN index instead of HNSW for the semantic search component.
+
+**When to use StreamingDiskANN:**
+- Large datasets where HNSW doesn't fit in memory
+- Queries that filter by labels (e.g., tenant_id, category, tags)
+- When you need high-performance filtered vector search
+
+**Label-based filtering:** StreamingDiskANN supports filtered indexes on `smallint[]` label columns. Labels are indexed alongside vectors, enabling efficient filtered search without post-filtering accuracy loss.
+
+```sql
+-- Enable pgvectorscale (in addition to pgvector)
+CREATE EXTENSION IF NOT EXISTS vectorscale;
+
+-- Table with label column for filtering
+CREATE TABLE documents (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  content TEXT NOT NULL,
+  embedding halfvec(1536) NOT NULL,
+  labels smallint[] NOT NULL  -- e.g., category IDs, tenant IDs
+);
+
+-- StreamingDiskANN index with label filtering
+CREATE INDEX ON documents USING diskann (embedding vector_cosine_ops, labels);
+
+-- BM25 index for keyword search
+CREATE INDEX ON documents USING bm25 (content) WITH (text_config = 'english');
+
+-- Filtered semantic search using && (array overlap)
+SELECT id, content FROM documents
+WHERE labels && ARRAY[1, 3]::smallint[]
+ORDER BY embedding <=> $1::halfvec(1536) LIMIT 50;
+```
+
+See the [pgvectorscale documentation](https://github.com/timescale/pgvectorscale) for more details on filtered indexes and tuning parameters.
+
 ## Monitoring & Debugging
 
 ```sql

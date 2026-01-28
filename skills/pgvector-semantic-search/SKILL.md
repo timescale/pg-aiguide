@@ -263,6 +263,10 @@ CREATE TABLE items (
 - Filters that match few rows require prefiltering, partitioning, or iterative scan.
 - Always validate filtered queries by measuring p95/p99 latency and tuples visited under realistic load.
 
+### Alternative: pgvectorscale for label-based filtering
+
+For large datasets with label-based filters, [pgvectorscale](https://github.com/timescale/pgvectorscale)'s StreamingDiskANN index supports filtered indexes on `smallint[]` columns. Labels are indexed alongside vectors, enabling efficient filtered search without the accuracy tradeoffs of HNSW post-filtering. See the pgvectorscale documentation for setup details.
+
 ## Bulk Loading
 
 ```sql
