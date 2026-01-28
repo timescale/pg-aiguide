@@ -1,6 +1,6 @@
 ---
-name: hybrid-text-search
-description: Hybrid search combining BM25 keyword search (pg_textsearch) with semantic search (pgvector) using RRF fusion
+name: postgres-hybrid-text-search
+description: Hybrid search in PostgreSQL combining BM25 keyword search (pg_textsearch) with semantic search (pgvector) using RRF fusion
 ---
 
 # Hybrid Text Search
