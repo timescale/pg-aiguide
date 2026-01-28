@@ -22,7 +22,7 @@ This setup provides a strong speed–recall tradeoff for most text-embedding wor
 
 ## Core Rules
 
-- **Enable the extension** in each database: `CREATE EXTENSION vector;`
+- **Enable the extension** in each database: `CREATE EXTENSION IF NOT EXISTS vector;`
 - **Use HNSW indexes by default**—superior speed-recall tradeoff, can be created on empty tables, no training step required. Only consider IVFFlat for write-heavy or memory-bound workloads.
 - **Use `halfvec` by default**—store and index as `halfvec` for 50% smaller storage and indexes with minimal recall loss.
 - **Index after bulk loading** initial data for best build performance.
@@ -48,7 +48,7 @@ This setup provides a strong speed–recall tradeoff for most text-embedding wor
 CREATE TABLE items (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   contents TEXT NOT NULL,
-  embedding halfvec(1536) NOT NULL
+  embedding halfvec(1536) NOT NULL  -- NOT NULL requires embeddings generated before insert, not async
 );
 CREATE INDEX ON items USING hnsw (embedding halfvec_cosine_ops);
 
@@ -102,7 +102,7 @@ COMMIT;
 Default to HNSW. Use IVFFlat only when HNSW’s operational costs matter more than peak recall.
 
 Choose IVFFlat if:
-- Write-heavy or constantly changing data (frequent inserts, backfills, or re-embeds)
+- Write-heavy or constantly changing data AND you're willing to rebuild the index frequently
 - You rebuild indexes often and want predictable build time and memory usage
 - Memory is tight and you cannot keep an HNSW graph mostly resident
 - Data is partitioned or tiered, and this index lives on colder partitions
@@ -176,10 +176,10 @@ SELECT *
 FROM (
   SELECT i.id, i.contents, i.embedding
   FROM items i, q
-  ORDER BY i.embedding_bq <~> q.qb
+  ORDER BY i.embedding_bq <~> q.qb -- computes binary distance using index
   LIMIT 800
 ) candidates
-ORDER BY candidates.embedding <=> $1::halfvec(1536)
+ORDER BY candidates.embedding <=> $1::halfvec(1536) -- computes halfvec distance (no index), more accurate than binary
 LIMIT 10;
 ```
 

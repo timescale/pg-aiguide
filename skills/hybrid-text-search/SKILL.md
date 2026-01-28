@@ -47,7 +47,7 @@ CREATE INDEX ON documents USING hnsw (embedding halfvec_cosine_ops);
 ### BM25 Notes
 
 - **Negative scores**: The `<@>` operator returns negative values where lower = better match. RRF uses rank position, so this doesn't affect fusion.
-- **Language config**: Change `text_config` to match your content language (e.g., `'french'`, `'german'`). See PostgreSQL text search configurations.
+- **Language config**: Change `text_config` to match your content language (e.g., `'french'`, `'german'`). See [PostgreSQL text search configurations](https://www.postgresql.org/docs/current/textsearch-configuration.html).
 - **Tuning**: BM25 has `k1` (term frequency saturation, default 1.2) and `b` (length normalization, default 0.75) parameters. Defaults work well; only tune if relevance is poor.
   ```sql
   CREATE INDEX ON documents USING bm25 (content) WITH (text_config = 'english', k1 = 1.5, b = 0.8);
