@@ -32,7 +32,7 @@ schema = 'docs'
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL')  # Optional: custom API endpoint
 EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'text-embedding-3-small')  # Default model
-EMBEDDING_DIMENSIONS = int(os.getenv('EMBEDDING_DIMENSIONS', '1536'))  # Default dimensions
+EMBEDDING_DIMENSIONS = 1536  # Fixed to match database schema
 
 with open(os.path.join(script_dir, 'tiger_docs_config.toml'), 'rb') as config_fp:
     config = tomllib.load(config_fp)
