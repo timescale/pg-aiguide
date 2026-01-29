@@ -15,7 +15,9 @@
     "pg-aiguide": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "skills.yaml",
+    "skills"
   ],
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
