@@ -10,7 +10,7 @@ description: |
   - Understand PostgreSQL best practices for normalization, constraints, or indexing
   - Design update-heavy, upsert-heavy, or OLTP-style tables
 
-  **Do NOT use for:** Time-series data, hypertable setup, or Timescale/TimescaleDB-specific features (use setup-timescaledb-hypertables instead)
+  Use setup-timescaledb-hypertables skill additionally when designing for time-series data, hypertable setup, or Timescale/TimescaleDB-specific features
 
   **Keywords:** PostgreSQL schema, table design, data types, PRIMARY KEY, FOREIGN KEY, indexes, B-tree, GIN, JSONB, constraints, normalization, identity columns, partitioning, row-level security
 
