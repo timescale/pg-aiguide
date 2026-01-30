@@ -1,7 +1,7 @@
 ---
 name: migrate-postgres-tables-to-hypertables
 description: |
-  Use this skill to migrate identified PostgreSQL tables to TimescaleDB hypertables with optimal configuration and validation.
+  Use this skill to migrate identified PostgreSQL tables to Timescale/TimescaleDB hypertables with optimal configuration and validation.
 
   **Trigger when user asks to:**
   - Migrate or convert PostgreSQL tables to hypertables
@@ -12,7 +12,7 @@ description: |
 
   **Prerequisites:** Tables already identified as candidates (use find-hypertable-candidates first if needed)
 
-  **Keywords:** migrate to hypertable, convert table, blue-green migration, in-place conversion, create_hypertable, migration validation, compression setup
+  **Keywords:** migrate to hypertable, convert table, Timescale, TimescaleDB, blue-green migration, in-place conversion, create_hypertable, migration validation, compression setup
 
   Step-by-step migration planning including: partition column selection, chunk interval calculation, PK/constraint handling, migration execution (in-place vs blue-green), and performance validation queries.
 ---

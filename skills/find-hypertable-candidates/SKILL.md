@@ -1,18 +1,18 @@
 ---
 name: find-hypertable-candidates
 description: |
-  Use this skill to analyze an existing PostgreSQL database and identify which tables should be converted to TimescaleDB hypertables.
+  Use this skill to analyze an existing PostgreSQL database and identify which tables should be converted to Timescale/TimescaleDB hypertables.
 
   **Trigger when user asks to:**
   - Analyze database tables for hypertable conversion potential
   - Identify time-series or event tables in an existing schema
-  - Evaluate if a table would benefit from TimescaleDB
-  - Audit PostgreSQL tables for migration to TimescaleDB/TigerData
+  - Evaluate if a table would benefit from Timescale/TimescaleDB
+  - Audit PostgreSQL tables for migration to Timescale/TimescaleDB/TigerData
   - Score or rank tables for hypertable candidacy
 
   **Requires:** Access to existing PostgreSQL database or schema definitions
 
-  **Keywords:** hypertable candidate, table analysis, migration assessment, time-series detection, insert-heavy tables, event logs, audit tables
+  **Keywords:** hypertable candidate, table analysis, migration assessment, Timescale, TimescaleDB, time-series detection, insert-heavy tables, event logs, audit tables
 
   Provides SQL queries to analyze table statistics, index patterns, and query patterns. Includes scoring criteria (8+ points = good candidate) and pattern recognition for IoT, events, transactions, and sequential data.
 ---

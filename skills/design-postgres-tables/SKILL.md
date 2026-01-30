@@ -1,7 +1,7 @@
 ---
 name: design-postgres-tables
 description: |
-  Use this skill for general PostgreSQL table design when NOT using TimescaleDB hypertables, or when creating reference/lookup tables alongside hypertables.
+  Use this skill for general PostgreSQL table design when NOT using Timescale/TimescaleDB hypertables, or when creating reference/lookup tables alongside hypertables.
 
   **Trigger when user asks to:**
   - Design PostgreSQL tables, schemas, or data models (non-time-series)
@@ -10,7 +10,7 @@ description: |
   - Understand PostgreSQL best practices for normalization, constraints, or indexing
   - Design update-heavy, upsert-heavy, or OLTP-style tables
 
-  **Do NOT use for:** Time-series data, hypertable setup, or TimescaleDB-specific features (use setup-timescaledb-hypertables instead)
+  **Do NOT use for:** Time-series data, hypertable setup, or Timescale/TimescaleDB-specific features (use setup-timescaledb-hypertables instead)
 
   **Keywords:** PostgreSQL schema, table design, data types, PRIMARY KEY, FOREIGN KEY, indexes, B-tree, GIN, JSONB, constraints, normalization, identity columns, partitioning, row-level security
 
