@@ -1,6 +1,20 @@
 ---
 name: postgres-hybrid-text-search
-description: Hybrid search in PostgreSQL combining BM25 keyword search (pg_textsearch) with semantic search (pgvector) using RRF fusion
+description: |
+  Use this skill to implement hybrid search combining BM25 keyword search with semantic vector search using Reciprocal Rank Fusion (RRF).
+
+  **Trigger when user asks to:**
+  - Combine keyword and semantic search
+  - Implement hybrid search or multi-modal retrieval
+  - Use BM25/pg_textsearch with pgvector together
+  - Implement RRF (Reciprocal Rank Fusion) for search
+  - Build search that handles both exact terms and meaning
+
+  **Prerequisites:** Familiarity with pgvector (see pgvector-semantic-search skill for vector-specific tuning)
+
+  **Keywords:** hybrid search, BM25, pg_textsearch, RRF, reciprocal rank fusion, keyword search, full-text search, reranking, cross-encoder
+
+  Covers: pg_textsearch BM25 index setup, parallel query patterns, client-side RRF fusion (Python/TypeScript), weighting strategies, and optional ML reranking.
 ---
 
 # Hybrid Text Search

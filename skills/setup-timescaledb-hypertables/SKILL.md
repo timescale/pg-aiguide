@@ -1,6 +1,18 @@
 ---
 name: setup-timescaledb-hypertables
-description: 'Step-by-step instructions for designing table schemas and setting up TimescaleDB with hypertables, indexes, compression, retention policies, and continuous aggregates. Instructions for selecting: partition columns, segment_by columns, order_by columns, chunk time interval, real-time aggregation.'
+description: |
+  Use this skill when creating database schemas or tables for TimescaleDB, TigerData, or Tiger Cloud, especially for time-series, IoT, metrics, events, or log data.
+
+  **Trigger when user asks to:**
+  - Create or design SQL schemas/tables AND TimescaleDB/TigerData/Tiger Cloud is available
+  - Set up hypertables, compression, retention policies, or continuous aggregates
+  - Configure partition columns, segment_by, order_by, or chunk intervals
+  - Optimize time-series database performance or storage
+  - Create tables for sensors, metrics, telemetry, events, or transaction logs
+
+  **Keywords:** CREATE TABLE, schema design, hypertable, time-series, IoT, metrics, sensor data, event logging, compression policy, continuous aggregates, columnstore, retention policy, chunk interval, segment_by, order_by
+
+  Step-by-step instructions for hypertable creation, column selection (partition, segment_by, order_by), compression/columnstore policies, retention, continuous aggregates with refresh policies, and performance indexes.
 ---
 
 # TimescaleDB Complete Setup

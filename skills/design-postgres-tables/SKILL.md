@@ -1,6 +1,20 @@
 ---
 name: design-postgres-tables
-description: Comprehensive PostgreSQL-specific table design reference covering data types, indexing, constraints, performance patterns, and advanced features
+description: |
+  Use this skill for general PostgreSQL table design when NOT using TimescaleDB hypertables, or when creating reference/lookup tables alongside hypertables.
+
+  **Trigger when user asks to:**
+  - Design PostgreSQL tables, schemas, or data models (non-time-series)
+  - Choose data types, constraints, or indexes for PostgreSQL
+  - Create user tables, order tables, reference tables, or JSONB schemas
+  - Understand PostgreSQL best practices for normalization, constraints, or indexing
+  - Design update-heavy, upsert-heavy, or OLTP-style tables
+
+  **Do NOT use for:** Time-series data, hypertable setup, or TimescaleDB-specific features (use setup-timescaledb-hypertables instead)
+
+  **Keywords:** PostgreSQL schema, table design, data types, PRIMARY KEY, FOREIGN KEY, indexes, B-tree, GIN, JSONB, constraints, normalization, identity columns, partitioning, row-level security
+
+  Comprehensive reference covering data types, indexing strategies, constraints, JSONB patterns, partitioning, and PostgreSQL-specific best practices.
 ---
 
 # PostgreSQL Table Design
