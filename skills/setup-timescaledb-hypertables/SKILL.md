@@ -1,7 +1,7 @@
 ---
 name: setup-timescaledb-hypertables
 description: |
-  Use this skill when creating database schemas or tables for Timescale, TimescaleDB, TigerData, or Tiger Cloud, especially for time-series, IoT, metrics, events, or log data.
+  Use this skill when creating database schemas or tables for Timescale, TimescaleDB, TigerData, or Tiger Cloud, especially for time-series, IoT, metrics, events, or log data. Use this to improve the performance of any insert-heavy table.
 
   **Trigger when user asks to:**
   - Create or design SQL schemas/tables AND Timescale/TimescaleDB/TigerData/Tiger Cloud is available
