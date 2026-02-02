@@ -10,7 +10,6 @@ description: |
   - Audit PostgreSQL tables for migration to Timescale/TimescaleDB/TigerData
   - Score or rank tables for hypertable candidacy
 
-  **Requires:** Access to existing PostgreSQL database or schema definitions
 
   **Keywords:** hypertable candidate, table analysis, migration assessment, Timescale, TimescaleDB, time-series detection, insert-heavy tables, event logs, audit tables
 
