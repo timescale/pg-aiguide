@@ -1,6 +1,19 @@
 ---
 name: design-postgres-tables
-description: Comprehensive PostgreSQL-specific table design reference covering data types, indexing, constraints, performance patterns, and advanced features
+description: |
+  Use this skill for general PostgreSQL table design.
+
+  **Trigger when user asks to:**
+  - Design PostgreSQL tables, schemas, or data models when creating new tables and when modifying existing ones.
+  - Choose data types, constraints, or indexes for PostgreSQL
+  - Create user tables, order tables, reference tables, or JSONB schemas
+  - Understand PostgreSQL best practices for normalization, constraints, or indexing
+  - Design update-heavy, upsert-heavy, or OLTP-style tables
+
+
+  **Keywords:** PostgreSQL schema, table design, data types, PRIMARY KEY, FOREIGN KEY, indexes, B-tree, GIN, JSONB, constraints, normalization, identity columns, partitioning, row-level security
+
+  Comprehensive reference covering data types, indexing strategies, constraints, JSONB patterns, partitioning, and PostgreSQL-specific best practices.
 ---
 
 # PostgreSQL Table Design
