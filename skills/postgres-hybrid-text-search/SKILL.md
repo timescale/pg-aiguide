@@ -10,7 +10,6 @@ description: |
   - Implement RRF (Reciprocal Rank Fusion) for search
   - Build search that handles both exact terms and meaning
 
-  **Prerequisites:** Familiarity with pgvector (see pgvector-semantic-search skill for vector-specific tuning)
 
   **Keywords:** hybrid search, BM25, pg_textsearch, RRF, reciprocal rank fusion, keyword search, full-text search, reranking, cross-encoder
 
