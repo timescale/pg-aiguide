@@ -1,4 +1,4 @@
-name: Lint
+name: CI
 
 on:
   push:
@@ -8,7 +8,6 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
@@ -17,3 +16,26 @@ jobs:
         run: ./bun run lint
       - name: Typecheck
         run: ./bun run typecheck
+
+  test-npx:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: ./bun install
+      - name: Build
+        run: ./bun run build
+      - name: Pack
+        run: npm pack
+      - name: Install packed tarball
+        run: |
+          mkdir /tmp/npx-test && cd /tmp/npx-test
+          npm init -y
+          npm install $GITHUB_WORKSPACE/*.tgz
+      - name: Verify skills via MCP protocol
+        run: |
+          cd /tmp/npx-test
+          echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}
+          {"jsonrpc":"2.0","id":2,"method":"prompts/list","params":{}}' \
+          | timeout 10 npx pg-aiguide stdio 2>/dev/null \
+          | grep -q "setup-timescaledb-hypertables"

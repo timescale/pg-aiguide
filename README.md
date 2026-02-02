@@ -200,6 +200,30 @@ Add the following to `~/.codeium/windsurf/mcp_config.json`
 
 </details>
 
+<details>
+<summary> Run locally via npx </summary>
+
+Run pg-aiguide locally without installing:
+
+```bash
+npx -y @tigerdata/pg-aiguide@latest stdio
+```
+
+MCP configuration for local stdio transport:
+
+```json
+{
+  "mcpServers": {
+    "pg-aiguide": {
+      "command": "npx",
+      "args": ["-y", "@tigerdata/pg-aiguide@latest", "stdio"]
+    }
+  }
+}
+```
+
+</details>
+
 ### 💡 Your First Prompt
 
 Once installed, pg-aiguide can answer Postgres questions or design schemas.
