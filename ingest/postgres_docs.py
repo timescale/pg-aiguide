@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import tiktoken
+from urllib.parse import quote
 
 
 THIS_DIR = Path(__file__).parent.resolve()
@@ -20,6 +21,9 @@ THIS_DIR = Path(__file__).parent.resolve()
 load_dotenv(dotenv_path=os.path.join(THIS_DIR, "..", ".env"))
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")  # Optional: custom API endpoint
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")  # Default model
+EMBEDDING_DIMENSIONS = 1536  # Fixed to match database schema
 
 POSTGRES_DIR = THIS_DIR / "postgres"
 SMGL_DIR = POSTGRES_DIR / "doc" / "src" / "sgml"
@@ -288,7 +292,11 @@ def insert_chunk(
     page: Page,
     chunk: Chunk,
 ) -> None:
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    # Initialize OpenAI client with optional custom base URL
+    client_kwargs = {"api_key": OPENAI_API_KEY}
+    if OPENAI_BASE_URL:
+        client_kwargs["base_url"] = OPENAI_BASE_URL
+    client = openai.OpenAI(**client_kwargs)
     content = ""
     for i in range(len(chunk.header_path)):
         content += (
@@ -297,8 +305,9 @@ def insert_chunk(
     content += chunk.content
     embedding = (
         client.embeddings.create(
-            model="text-embedding-3-small",
+            model=EMBEDDING_MODEL,
             input=chunk.content,
+            dimensions=EMBEDDING_DIMENSIONS,
         )
         .data[0]
         .embedding
@@ -578,7 +587,9 @@ def main():
     version = args.version
     update_repo()
     tag = get_version_tag(version)
-    db_uri = f"postgresql://{os.environ['PGUSER']}:{os.environ['PGPASSWORD']}@{os.environ['PGHOST']}:{os.environ['PGPORT']}/{os.environ['PGDATABASE']}"
+    # URL-encode password to handle special characters like '@'
+    encoded_password = quote(os.environ['PGPASSWORD'], safe='')
+    db_uri = f"postgresql://{os.environ['PGUSER']}:{encoded_password}@{os.environ['PGHOST']}:{os.environ['PGPORT']}/{os.environ['PGDATABASE']}"
     with psycopg.connect(db_uri) as conn:
         print(f"Building Postgres {version} ({tag}) documentation...")
         checkout_tag(tag)
