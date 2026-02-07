@@ -200,6 +200,27 @@ Add the following to `~/.codeium/windsurf/mcp_config.json`
 
 </details>
 
+<details>
+<summary> OpenCode </summary>
+
+Add the following to your OpenCode config file (`opencode.json`):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "pg-aiguide": {
+      "type": "remote",
+      "url": "https://mcp.tigerdata.com/docs"
+    }
+  }
+}
+```
+
+Add `use pg-aiguide` to your prompts to use the pg-aiguide tools.
+
+</details>
+
 ### 💡 Your First Prompt
 
 Once installed, pg-aiguide can answer Postgres questions or design schemas.
