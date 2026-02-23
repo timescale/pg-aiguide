@@ -8,6 +8,8 @@ ingest/postgres
 .mcpregistry_*
 download/
 server.json
+.claude/*.local.*
+.opencode/plans
 
 # Temporary files directory
 tmp/
