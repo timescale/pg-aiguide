@@ -100,12 +100,15 @@ await Bun.write(
 const cursorPluginFile = Bun.file('.cursor-plugin/plugin.json');
 const cursorPlugin = await cursorPluginFile.json();
 cursorPlugin.version = nextVersion;
-await Bun.write(
-  cursorPluginFile,
-  `${JSON.stringify(cursorPlugin, null, 2)}\n`,
-);
+await Bun.write(cursorPluginFile, `${JSON.stringify(cursorPlugin, null, 2)}\n`);
 
-await run(['git', 'add', 'package.json', '.claude-plugin/marketplace.json', '.cursor-plugin/plugin.json']);
+await run([
+  'git',
+  'add',
+  'package.json',
+  '.claude-plugin/marketplace.json',
+  '.cursor-plugin/plugin.json',
+]);
 await run(['git', 'commit', '-m', `release: ${tagName}`]);
 await run(['git', 'tag', '-a', tagName, '-m', tagName]);
 await run(['git', 'push', '--follow-tags']);
