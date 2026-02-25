@@ -27,7 +27,8 @@ from bs4 import BeautifulSoup
 from markdownify import markdownify
 from psycopg.sql import SQL, Identifier
 
-from ingest.constants import BUILD_DIR, POSTGIS_BASE_URL
+from ingest.constants import BUILD_DIR, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL, POSTGIS_BASE_URL, POSTGIS_DOMAIN
+from ingest.encoder import ENC
 from ingest.types import Chunk, Page
 from ingest.utils import create_chunks
 
@@ -186,12 +187,12 @@ class PostGISDocsScraper:
                 if current_chunk_lines:
                     content = "\n".join(current_chunk_lines).strip()
                     if content:
-                        chunks.append(Chunk(
+                        chunks += create_chunks(
                             idx=idx,
                             header=current_header,
                             header_path=header_path.copy(),
                             content=content,
-                        ))
+                        )
                         idx += 1
 
                 # Start new chunk
@@ -214,61 +215,6 @@ class PostGISDocsScraper:
                 ))
 
         return chunks
-
-    def process_chunks(self, chunks: list[Chunk]) -> list[Chunk]:
-        """Process chunks: count tokens and split oversized chunks."""
-        processed = []
-
-        for chunk in chunks:
-            chunk.token_count = len(ENC.encode(chunk.content))
-
-            # Skip chunks that are too small
-            if chunk.token_count < 10:
-                continue
-
-            # Split oversized chunks
-            if chunk.token_count > MAX_CHUNK_TOKENS:
-                subchunks = self.split_chunk(chunk)
-                processed.extend(subchunks)
-            else:
-                processed.append(chunk)
-
-        return processed
-
-    def split_chunk(self, chunk: Chunk) -> list[Chunk]:
-        """Split an oversized chunk into smaller pieces."""
-        num_subchunks = (chunk.token_count // MAX_CHUNK_TOKENS) + 1
-        input_ids = ENC.encode(chunk.content)
-        tokens_per_chunk = len(input_ids) // num_subchunks
-
-        subchunks = []
-        subindex = 0
-        idx = 0
-
-        while idx < len(input_ids):
-            cur_idx = min(idx + tokens_per_chunk, len(input_ids))
-            chunk_ids = input_ids[idx:cur_idx]
-
-            if not chunk_ids:
-                break
-
-            decoded = ENC.decode(chunk_ids)
-            if decoded:
-                subchunks.append(Chunk(
-                    idx=chunk.idx,
-                    header=chunk.header,
-                    header_path=chunk.header_path,
-                    content=decoded,
-                    token_count=len(chunk_ids),
-                    subindex=subindex,
-                ))
-                subindex += 1
-
-            if cur_idx == len(input_ids):
-                break
-            idx += tokens_per_chunk
-
-        return subchunks
 
     def save_to_file(self, page: Page, markdown: str, chunks: list[Chunk]) -> None:
         """Save content to file."""
@@ -505,7 +451,6 @@ chunks: {len(chunks)}
 
                 # Chunk processing
                 chunks = self.chunk_markdown(markdown, page)
-                chunks = self.process_chunks(chunks)
 
                 print(f"  Title: {title}")
                 print(f"  Chunks: {len(chunks)}")

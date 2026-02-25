@@ -25,3 +25,5 @@ def create_chunks(idx: int, header: str, header_path: str, content: str) -> list
                 subindex=sub_idx,
             )
         )
+        
+    return chunks

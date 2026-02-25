@@ -14,7 +14,7 @@ from bs4 import element as BeautifulSoupElement
 from markdownify import markdownify
 from psycopg.sql import SQL, Identifier
 
-from ingest.constants import BUILD_DIR, MAX_CHUNK_TOKENS, THIS_DIR
+from ingest.constants import BUILD_DIR, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, MAX_CHUNK_TOKENS, OPENAI_API_KEY, OPENAI_BASE_URL, POSTGRES_BASE_URL, THIS_DIR
 from ingest.encoder import ENC
 from ingest.types import Chunk, Page
 
@@ -32,6 +32,7 @@ def update_repo():
             check=True,
             env=os.environ,
             text=True,
+            cwd=THIS_DIR,
         )
     else:
         subprocess.run(
