@@ -6,8 +6,13 @@
       "type": "debugpy",
       "request": "launch",
       "module": "ingest.postgis_docs",
-      "args": ["--version", "3.5", "--storage-type", "file"],
-      "cwd": "${workspaceFolder}/ingest",
+      "args": [
+        "--version",
+        "3.5",
+        "--storage-type",
+        "file"
+      ],
+      "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/ingest/.venv/bin/python",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true
@@ -17,8 +22,13 @@
       "type": "debugpy",
       "request": "launch",
       "module": "ingest.postgis_docs",
-      "args": ["--version", "3.5", "--storage-type", "database"],
-      "cwd": "${workspaceFolder}/ingest",
+      "args": [
+        "--version",
+        "3.5",
+        "--storage-type",
+        "database"
+      ],
+      "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/ingest/.venv/bin/python",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true
@@ -28,8 +38,10 @@
       "type": "debugpy",
       "request": "launch",
       "module": "ingest.postgres_docs",
-      "args": ["17"],
-      "cwd": "${workspaceFolder}/ingest",
+      "args": [
+        "17"
+      ],
+      "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/ingest/.venv/bin/python",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true
@@ -39,8 +51,11 @@
       "type": "debugpy",
       "request": "launch",
       "module": "ingest.tiger_docs",
-      "args": ["--storage-type", "file"],
-      "cwd": "${workspaceFolder}/ingest",
+      "args": [
+        "--storage-type",
+        "file"
+      ],
+      "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/ingest/.venv/bin/python",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true
@@ -50,11 +65,50 @@
       "type": "debugpy",
       "request": "launch",
       "module": "ingest.tiger_docs",
-      "args": ["--storage-type", "database"],
-      "cwd": "${workspaceFolder}/ingest",
+      "args": [
+        "--storage-type",
+        "database"
+      ],
+      "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/ingest/.venv/bin/python",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true
+    },
+    {
+      "name": "pg-aiguide MCP Server (stdio)",
+      "type": "node",
+      "request": "launch",
+      "preLaunchTask": "pg-aiguide MCP - Build Only",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--enable-source-maps"],
+      "program": "${workspaceFolder}/dist/index.js",
+      "args": ["stdio"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/dist/**/*.js", "!**/node_modules/**"],
+      "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "pg-aiguide MCP Server (http)",
+      "type": "node",
+      "request": "launch",
+      "preLaunchTask": "pg-aiguide MCP - Build Only",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--enable-source-maps"],
+      "program": "${workspaceFolder}/dist/index.js",
+      "args": ["http"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/dist/**/*.js", "!**/node_modules/**"],
+      "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
     }
   ]
 }
