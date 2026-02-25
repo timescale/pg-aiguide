@@ -36,7 +36,7 @@ def create_chunks(idx: int, header: str, header_path: str, content: str) -> list
     return chunks
 
 
-_HEADER_PATTERN = re.compile(r"^(#{1,3}) (.+)$")
+_HEADER_PATTERN = re.compile(r"^(#{1,6}) (.+)$")
 _CODEBLOCK_PATTERN = re.compile(r"^```")
 
 
