@@ -7,8 +7,6 @@ import os
 import re
 import sys
 import argparse
-import asyncio
-import time
 from urllib.parse import urlparse, urljoin, quote
 import hashlib
 import requests
@@ -17,8 +15,10 @@ import psycopg
 from psycopg.sql import SQL, Identifier
 import openai
 import tomllib
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+
+from ingest.constants import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -27,12 +27,6 @@ if not os.path.exists(os.path.join(script_dir, 'build')):
 
 load_dotenv(dotenv_path=os.path.join(script_dir, '..', '.env'))
 schema = 'docs'
-
-# OpenAI configuration with optional custom endpoint and model
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL')  # Optional: custom API endpoint
-EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'text-embedding-3-small')  # Default model
-EMBEDDING_DIMENSIONS = 1536  # Fixed to match database schema
 
 with open(os.path.join(script_dir, 'tiger_docs_config.toml'), 'rb') as config_fp:
     config = tomllib.load(config_fp)
