@@ -1,0 +1,60 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "PostGIS Docs (file, v3.5)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "ingest.postgis_docs",
+      "args": ["--version", "3.5", "--storage-type", "file"],
+      "cwd": "${workspaceFolder}/ingest",
+      "python": "${workspaceFolder}/ingest/.venv/bin/python",
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": true
+    },
+    {
+      "name": "PostGIS Docs (database, v3.5)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "ingest.postgis_docs",
+      "args": ["--version", "3.5", "--storage-type", "database"],
+      "cwd": "${workspaceFolder}/ingest",
+      "python": "${workspaceFolder}/ingest/.venv/bin/python",
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": true
+    },
+    {
+      "name": "Postgres Docs",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "ingest.postgres_docs",
+      "args": ["17"],
+      "cwd": "${workspaceFolder}/ingest",
+      "python": "${workspaceFolder}/ingest/.venv/bin/python",
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": true
+    },
+    {
+      "name": "Tiger Docs (file)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "ingest.tiger_docs",
+      "args": ["--storage-type", "file"],
+      "cwd": "${workspaceFolder}/ingest",
+      "python": "${workspaceFolder}/ingest/.venv/bin/python",
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": true
+    },
+    {
+      "name": "Tiger Docs (database)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "ingest.tiger_docs",
+      "args": ["--storage-type", "database"],
+      "cwd": "${workspaceFolder}/ingest",
+      "python": "${workspaceFolder}/ingest/.venv/bin/python",
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": true
+    }
+  ]
+}
