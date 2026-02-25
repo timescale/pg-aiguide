@@ -10,9 +10,9 @@ const versions = [...pg_versions, 'latest'] as const;
 
 const inputSchema = {
   source: z
-    .enum(['tiger', 'postgres'])
+    .enum(['tiger', 'postgres', 'postgis'])
     .describe(
-      'The documentation source to search. "tiger" for Tiger Cloud and TimescaleDB, "postgres" for PostgreSQL.',
+      'The documentation source to search. "tiger" for Tiger Cloud and TimescaleDB, "postgres" for PostgreSQL, "postgis" for PostGIS spatial extension.',
     ),
   search_type: z
     .enum(['semantic', 'keyword'])
@@ -85,7 +85,7 @@ export const searchDocsFactory: ApiFactory<
   config: {
     title: 'Search Documentation',
     description:
-      'Search documentation using semantic or keyword search. Supports Tiger Cloud (TimescaleDB) and PostgreSQL.',
+      'Search documentation using semantic or keyword search. Supports Tiger Cloud (TimescaleDB), PostgreSQL, and PostGIS.',
     inputSchema,
     outputSchema,
   },
@@ -144,6 +144,21 @@ SELECT
           [JSON.stringify(embedding), version, limit],
         );
         return { results: result.rows };
+      } else if (source === 'postgis') {
+        const result = await pgPool.query<SemanticResult>(
+          /* sql */ `
+SELECT
+  id::int,
+  content,
+  metadata::text,
+  embedding <=> $1::vector(1536) AS distance
+ FROM ${schema}.postgis_chunks
+ ORDER BY distance
+ LIMIT $2
+`,
+          [JSON.stringify(embedding), limit],
+        );
+        return { results: result.rows };
       } else {
         // @ts-expect-error exhaustive cases
         throw new Error(`Unsupported source: ${source.toString()}`);
@@ -181,6 +196,21 @@ SELECT
           [query, version, limit],
         );
 
+        return { results: result.rows };
+      } else if (source === 'postgis') {
+        const result = await pgPool.query<KeywordResult>(
+          /* sql */ `
+SELECT
+  id::int,
+  content,
+  metadata::text,
+  -(content <@> to_bm25query($1, '${schema}.postgis_chunks_content_idx')) as score
+ FROM ${schema}.postgis_chunks
+ ORDER BY content <@> to_bm25query($1, '${schema}.postgis_chunks_content_idx')
+ LIMIT $2
+`,
+          [query, limit],
+        );
         return { results: result.rows };
       } else {
         // @ts-expect-error exhaustive cases

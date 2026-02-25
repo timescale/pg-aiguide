@@ -2,58 +2,55 @@
 
 All methods are exposed as MCP tools.
 
-## Semantic Search
+## Documentation Search
 
-### `semantic_search_postgres_docs`
+### `search_docs`
 
-Searches the PostgreSQL documentation for relevant entries based on semantic similarity to the search prompt.
+Unified search tool for querying documentation using semantic (vector similarity) or keyword (BM25) search.
 
-**MCP Tool**: `semantic_search_postgres_docs`
+**MCP Tool**: `search_docs`
 
 #### Input
 
 ```jsonc
 {
-  "prompt": "What is the SQL command to create a table?",
-  "version": 17, // optional, default is 17 (supports versions 14-18)
-  "limit": 10, // optional, default is 10
+  "source": "postgres", // required: "postgres", "tiger", or "postgis"
+  "search_type": "semantic", // required: "semantic" or "keyword"
+  "query": "How do I create an index?", // required: search query
+  "version": "17", // required: PostgreSQL version ("14"-"18" or "latest"), ignored for tiger/postgis
+  "limit": 10 // required: maximum results to return
 }
 ```
 
-#### Output
+#### Output (Semantic Search)
 
 ```jsonc
 {
   "results": [
     {
       "id": 11716,
-      "content": "CREATE TABLE ...",
+      "content": "CREATE INDEX ...",
       "metadata": "{...}", // JSON-encoded metadata
-      "distance": 0.407, // lower = more relevant
-    },
-    // ...more results
-  ],
+      "distance": 0.407 // lower = more relevant
+    }
+  ]
 }
 ```
 
-### `semantic_search_tiger_docs`
-
-Searches the TigerData and TimescaleDB documentation using semantic similarity.
-
-**MCP Tool**: `semantic_search_tiger_docs`
-
-#### Input
+#### Output (Keyword Search)
 
 ```jsonc
 {
-  "prompt": "How do I set up continuous aggregates?",
-  "limit": 10, // optional, default is 10
+  "results": [
+    {
+      "id": 11716,
+      "content": "CREATE INDEX ...",
+      "metadata": "{...}", // JSON-encoded metadata
+      "score": 12.5 // higher = more relevant
+    }
+  ]
 }
 ```
-
-#### Output
-
-Same format as PostgreSQL semantic search above.
 
 ## Skills
 

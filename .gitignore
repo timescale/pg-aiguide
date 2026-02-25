@@ -3,6 +3,8 @@ node_modules
 .env
 ingest/build
 ingest/postgres
+ingest/__pycache__
+ingest/.venv
 .idea
 .migrate
 .mcpregistry_*
