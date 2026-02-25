@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -19,3 +20,13 @@ class Chunk:
     content: str
     token_count: int = 0
     subindex: int = 0
+
+
+@dataclass
+class PageSource:
+    page: Page
+    lines: Iterable[str]
+    initial_header: str = ""
+    initial_header_path: list[str] = field(default_factory=list)
+    refentry: bool = False
+    header_transform: Callable[[str], str] | None = None

@@ -7,462 +7,74 @@ a sitemap, this script provides specialized scraping logic to handle the DocBook
 static HTML documentation.
 
 Usage:
-    uv run python postgis_docs.py --version 3.5 --storage-type file --max-pages 10
-    uv run python postgis_docs.py --version 3.5 --storage-type database
+    uv run python postgis_docs.py --version 3.5 --max-pages 10
+    uv run python postgis_docs.py --version 3.5
 """
 
 import argparse
-import json
-import os
-import time
-from pathlib import Path
-from typing import Optional
-from urllib.parse import quote, urljoin
+from collections.abc import Iterable
+from urllib.parse import urljoin
 
-import openai
 import psycopg
 import requests
-from bs4 import BeautifulSoup
-from markdownify import markdownify
-from psycopg.sql import SQL, Identifier
-
-from ingest.constants import (
-    BUILD_DIR,
-    EMBEDDING_DIMENSIONS,
-    EMBEDDING_MODEL,
-    OPENAI_API_KEY,
-    OPENAI_BASE_URL,
-    POSTGIS_BASE_URL,
-    POSTGIS_DOMAIN,
+from ingest.constants import POSTGIS_BASE_URL, POSTGIS_DOMAIN
+from ingest.document_importer import DocumentImporter, PageSource
+from ingest.types import Page
+from ingest.utils.beautiful_soup import (
+    clean_postgis_html,
+    extract_title,
+    fetch_page_as_soup,
+    get_postgis_page_urls,
+    postgis_html_to_markdown,
 )
-from ingest.types import Chunk, Page
-from ingest.utils.chunking import chunk_markdown_lines
-
-# Pages to skip (index, table of contents, etc.)
-SKIP_PAGES = {
-    "index.html",
-    "bookindex.html",
-    "PostGIS_Special_Functions_Index.html",
-    "release_notes.html",
-}
-
-# HTML element selectors to remove
-REMOVE_SELECTORS = [
-    "script",
-    "style",
-    "header",
-    "footer",
-    ".navheader",
-    ".navfooter",
-    ".toc",
-    ".titlepage .abstract img",
-]
+from ingest.utils.db import build_database_uri
 
 
-class PostGISDocsScraper:
-    """PostGIS documentation scraper for the official manual."""
-
+class PostGISDocsImporter(DocumentImporter):
     def __init__(
         self,
         version: str,
-        storage_type: str = "database",
-        output_dir: Optional[Path] = None,
-        max_pages: Optional[int] = None,
+        max_pages: int | None = None,
         delay: float = 1.0,
-        db_uri: Optional[str] = None,
     ):
-        self.version = version
-        self.storage_type = storage_type
-        self.output_dir = output_dir or BUILD_DIR / f"postgis_{version}"
+        super().__init__(version, "postgis_pages", "postgis_chunks")
         self.max_pages = max_pages
         self.delay = delay
-        self.db_uri = db_uri
         self.base_url = f"{POSTGIS_BASE_URL}/manual-{version}/"
         self.session = requests.Session()
         self.session.headers.update(
             {"User-Agent": "Mozilla/5.0 (compatible; PostGISDocsScraper/1.0)"}
         )
         self.processed_urls: set[str] = set()
-        self.pages_processed = 0
 
-        if self.storage_type == "file":
-            self.output_dir.mkdir(parents=True, exist_ok=True)
+    def get_pages(self) -> Iterable[PageSource]:
+        for page_url in get_postgis_page_urls(self.session, self.base_url, self.max_pages):
+            print(f"\nProcessing: {page_url}")
+            full_url = urljoin(self.base_url, page_url)
+            soup = fetch_page_as_soup(self.session, full_url, self.processed_urls, self.delay)
+            if soup is None:
+                continue
 
-    def get_manual_pages(self) -> list[str]:
-        """Get all page URLs from the manual index."""
-        print(f"Fetching manual index from {self.base_url}...")
+            title = extract_title(soup, fallback="PostGIS Documentation")
+            soup = clean_postgis_html(soup)
+            markdown = postgis_html_to_markdown(soup)
 
-        try:
-            response = self.session.get(self.base_url, timeout=30)
-            response.raise_for_status()
-        except Exception as e:
-            raise RuntimeError(f"Failed to fetch manual index: {e}")
-
-        soup = BeautifulSoup(response.content, "html.parser")
-
-        # Extract all links from the table of contents
-        pages = set()
-        for link in soup.find_all("a", href=True):
-            href = link["href"]
-            # Only process relative HTML page links
-            if href.endswith(".html") and not href.startswith("http"):
-                # Skip specific pages
-                if href in SKIP_PAGES:
-                    continue
-                pages.add(href)
-
-        # Sort for consistent processing order
-        return sorted(pages)
-
-    def fetch_page(self, page_url: str) -> Optional[BeautifulSoup]:
-        """Fetch and parse a single page."""
-        full_url = urljoin(self.base_url, page_url)
-
-        if full_url in self.processed_urls:
-            return None
-
-        try:
-            time.sleep(self.delay)
-            response = self.session.get(full_url, timeout=30)
-            response.raise_for_status()
-            self.processed_urls.add(full_url)
-            return BeautifulSoup(response.content, "html.parser")
-        except Exception as e:
-            print(f"Error fetching {full_url}: {e}")
-            return None
-
-    def clean_html(self, soup: BeautifulSoup) -> BeautifulSoup:
-        """Clean HTML by removing unwanted elements."""
-        for selector in REMOVE_SELECTORS:
-            for element in soup.select(selector):
-                element.decompose()
-
-        # Remove images with data: URLs
-        for img in soup.find_all("img", src=True):
-            if img["src"].startswith("data:"):
-                img.decompose()
-
-        return soup
-
-    def extract_title(self, soup: BeautifulSoup) -> str:
-        """Extract page title."""
-        title_tag = soup.find("title")
-        if title_tag:
-            return title_tag.get_text().strip()
-
-        h1 = soup.find("h1")
-        if h1:
-            return h1.get_text().strip()
-
-        h2 = soup.find("h2")
-        if h2:
-            return h2.get_text().strip()
-
-        return "PostGIS Documentation"
-
-    def html_to_markdown(self, soup: BeautifulSoup) -> str:
-        """Convert HTML to Markdown."""
-        # Find main content area
-        main_content = (
-            soup.find("div", class_="refentry")
-            or soup.find("div", class_="chapter")
-            or soup.find("div", class_="section")
-            or soup.find("div", class_="book")
-            or soup.find("body")
-            or soup
-        )
-
-        return markdownify(str(main_content), heading_style="ATX")
-
-    def save_to_file(self, page: Page, markdown: str, chunks: list[Chunk]) -> None:
-        """Save content to file."""
-        # Save complete Markdown
-        md_file = self.output_dir / f"{Path(page.filename).stem}.md"
-        content = f"""---
-title: {page.title}
-url: {page.url}
-version: {page.version}
-chunks: {len(chunks)}
----
-
-{markdown}
-"""
-        md_file.write_text(content, encoding="utf-8")
-        print(f"  Saved: {md_file.name} ({len(chunks)} chunks)")
-
-    def save_to_database(
-        self,
-        conn: psycopg.Connection,
-        page: Page,
-        chunks: list[Chunk],
-    ) -> None:
-        """Save content to database."""
-        # Initialize OpenAI client with optional custom base URL
-        client_kwargs = {"api_key": OPENAI_API_KEY}
-        if OPENAI_BASE_URL:
-            client_kwargs["base_url"] = OPENAI_BASE_URL
-        client = openai.OpenAI(**client_kwargs)
-
-        # Insert page record
-        result = conn.execute(
-            """
-            INSERT INTO docs.postgis_pages_tmp
-            (version, url, domain, filename, content_length, chunks_count)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """,
-            [
-                page.version,
-                page.url,
-                page.domain,
-                page.filename,
-                sum(len(c.content) for c in chunks),
-                len(chunks),
-            ],
-        )
-        row = result.fetchone()
-        assert row is not None
-        page.id = row[0]
-
-        # Insert chunk records
-        for chunk in chunks:
-            # Generate embedding using configurable model and dimensions
-            try:
-                embedding = (
-                    client.embeddings.create(
-                        model=EMBEDDING_MODEL,
-                        input=chunk.content,
-                        dimensions=EMBEDDING_DIMENSIONS,
-                    )
-                    .data[0]
-                    .embedding
-                )
-            except Exception as e:
-                print(f"  Warning: Failed to generate embedding: {e}")
-                embedding = None
-
-            conn.execute(
-                """
-                INSERT INTO docs.postgis_chunks_tmp
-                (page_id, chunk_index, sub_chunk_index, content, metadata, embedding)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                """,
-                [
-                    page.id,
-                    chunk.idx,
-                    chunk.subindex,
-                    chunk.content,
-                    json.dumps(
-                        {
-                            "header": chunk.header,
-                            "header_path": chunk.header_path,
-                            "source_url": page.url,
-                            "token_count": chunk.token_count,
-                        }
-                    ),
-                    embedding,
-                ],
+            page = Page(
+                id=0,
+                version=self.version,
+                url=urljoin(self.base_url, page_url),
+                domain=POSTGIS_DOMAIN,
+                filename=page_url,
+                title=title,
             )
 
-        conn.commit()
-        print(f"  Saved to DB: {page.filename} ({len(chunks)} chunks)")
-
-    def init_database(self, conn: psycopg.Connection) -> None:
-        """Initialize database temporary tables."""
-        print("Initializing database tables...")
-
-        conn.execute("DROP TABLE IF EXISTS docs.postgis_chunks_tmp CASCADE")
-        conn.execute("DROP TABLE IF EXISTS docs.postgis_pages_tmp CASCADE")
-
-        # Create pages table
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS docs.postgis_pages_tmp (
-                id SERIAL PRIMARY KEY,
-                version TEXT NOT NULL,
-                url TEXT NOT NULL UNIQUE,
-                domain TEXT NOT NULL,
-                filename TEXT NOT NULL,
-                content_length INTEGER DEFAULT 0,
-                chunks_count INTEGER DEFAULT 0,
-                scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            print(f"  Title: {title}")
+            yield PageSource(
+                page=page,
+                lines=markdown.split("\n"),
+                initial_header=title,
+                initial_header_path=[title],
             )
-        """)
-
-        # Create chunks table
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS docs.postgis_chunks_tmp (
-                id SERIAL PRIMARY KEY,
-                page_id INTEGER REFERENCES docs.postgis_pages_tmp(id) ON DELETE CASCADE,
-                chunk_index INTEGER NOT NULL,
-                sub_chunk_index INTEGER DEFAULT 0,
-                content TEXT NOT NULL,
-                metadata JSONB,
-                embedding vector(1536)
-            )
-        """)
-
-        conn.commit()
-
-    def finalize_database(self, conn: psycopg.Connection) -> None:
-        """Finalize database operations by renaming temporary tables."""
-        print("Finalizing database...")
-
-        with conn.cursor() as cur:
-            # Drop old tables if they exist
-            cur.execute("DROP TABLE IF EXISTS docs.postgis_chunks CASCADE")
-            cur.execute("DROP TABLE IF EXISTS docs.postgis_pages CASCADE")
-
-            # Rename temporary tables
-            cur.execute("ALTER TABLE docs.postgis_chunks_tmp RENAME TO postgis_chunks")
-            cur.execute("ALTER TABLE docs.postgis_pages_tmp RENAME TO postgis_pages")
-
-            # Rename indexes and constraints
-            for table in ["postgis_pages", "postgis_chunks"]:
-                cur.execute(
-                    """
-                    SELECT indexname
-                    FROM pg_indexes
-                    WHERE schemaname = 'docs'
-                    AND tablename = %s
-                    AND indexname LIKE %s
-                """,
-                    [table, "%_tmp_%"],
-                )
-
-                for row in cur.fetchall():
-                    old_name = row[0]
-                    new_name = old_name.replace("_tmp_", "_")
-                    cur.execute(
-                        SQL("ALTER INDEX docs.{old} RENAME TO {new}").format(
-                            old=Identifier(old_name),
-                            new=Identifier(new_name),
-                        )
-                    )
-
-            # Rename foreign key constraints
-            cur.execute(
-                """
-                SELECT conname
-                FROM pg_constraint
-                WHERE conrelid = to_regclass('docs.postgis_chunks')
-                AND contype = 'f'
-                AND conname LIKE %s
-            """,
-                ["%_tmp_%"],
-            )
-
-            for row in cur.fetchall():
-                old_name = row[0]
-                new_name = old_name.replace("_tmp_", "_")
-                cur.execute(
-                    SQL(
-                        "ALTER TABLE docs.postgis_chunks RENAME CONSTRAINT {old} TO {new}"
-                    ).format(
-                        old=Identifier(old_name),
-                        new=Identifier(new_name),
-                    )
-                )
-
-        conn.commit()
-        print("Database finalized successfully.")
-
-    def run(self) -> None:
-        """Run the scraper."""
-        print(f"Starting PostGIS {self.version} documentation scraper...")
-        print(f"Base URL: {self.base_url}")
-        print(f"Storage type: {self.storage_type}")
-
-        if self.max_pages:
-            print(f"Max pages: {self.max_pages}")
-
-        # Get all page URLs
-        pages = self.get_manual_pages()
-        print(f"Found {len(pages)} pages to process")
-
-        if self.max_pages:
-            pages = pages[: self.max_pages]
-            print(f"Limited to {len(pages)} pages")
-
-        # Database connection (if needed)
-        conn = None
-        if self.storage_type == "database":
-            if not self.db_uri:
-                raise ValueError("Database URI is required for database storage")
-            conn = psycopg.connect(self.db_uri)
-            self.init_database(conn)
-
-        try:
-            # Process each page
-            for page_url in pages:
-                print(f"\nProcessing: {page_url}")
-
-                soup = self.fetch_page(page_url)
-                if soup is None:
-                    continue
-
-                self.pages_processed += 1
-
-                # Extract information
-                title = self.extract_title(soup)
-                soup = self.clean_html(soup)
-                markdown = self.html_to_markdown(soup)
-
-                # Create page object
-                page = Page(
-                    id=0,
-                    version=self.version,
-                    url=urljoin(self.base_url, page_url),
-                    domain=POSTGIS_DOMAIN,
-                    filename=page_url,
-                    title=title,
-                )
-
-                # Chunk processing
-                chunks = chunk_markdown_lines(
-                    markdown.split("\n"),
-                    initial_header=page.title,
-                    initial_header_path=[page.title],
-                )
-
-                print(f"  Title: {title}")
-                print(f"  Chunks: {len(chunks)}")
-
-                # Save
-                if self.storage_type == "file":
-                    self.save_to_file(page, markdown, chunks)
-                elif self.storage_type == "database" and conn:
-                    self.save_to_database(conn, page, chunks)
-
-            # Finalize database operations
-            if conn:
-                self.finalize_database(conn)
-
-            print(f"\n{'=' * 50}")
-            print(f"Completed! Processed {self.pages_processed} pages.")
-
-        finally:
-            if conn:
-                conn.close()
-
-
-def build_database_uri() -> Optional[str]:
-    """Build database URI from environment variables."""
-    db_url = os.environ.get("DB_URL")
-    if db_url:
-        return db_url
-
-    pg_user = os.environ.get("PGUSER")
-    pg_password = os.environ.get("PGPASSWORD")
-    pg_host = os.environ.get("PGHOST")
-    pg_port = os.environ.get("PGPORT")
-    pg_database = os.environ.get("PGDATABASE")
-
-    if all([pg_user, pg_password, pg_host, pg_port, pg_database]):
-        # URL-encode password to handle special characters like '@'
-        encoded_password = quote(pg_password, safe="")
-        return f"postgresql://{pg_user}:{encoded_password}@{pg_host}:{pg_port}/{pg_database}"
-
-    return None
 
 
 def main():
@@ -471,9 +83,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --version 3.5 --storage-type file --max-pages 10
-  %(prog)s --version 3.5 --storage-type database
-  %(prog)s --version 3.4 --output-dir ./postgis_3.4_docs
+  %(prog)s --version 3.5 --max-pages 10
+  %(prog)s --version 3.5
+  %(prog)s --version 3.4
         """,
     )
 
@@ -482,20 +94,6 @@ Examples:
         "-v",
         required=True,
         help="PostGIS version to ingest (e.g., 3.5, 3.4)",
-    )
-
-    parser.add_argument(
-        "--storage-type",
-        choices=["file", "database"],
-        default="database",
-        help="Storage type: file or database (default: database)",
-    )
-
-    parser.add_argument(
-        "--output-dir",
-        "-o",
-        type=Path,
-        help="Output directory for file storage (default: build/postgis_<version>)",
     )
 
     parser.add_argument(
@@ -520,32 +118,23 @@ Examples:
 
     args = parser.parse_args()
 
-    # Validate database storage requirements
     db_uri = args.database_uri or build_database_uri()
-    if args.storage_type == "database" and not db_uri:
-        print("Error: Database storage requires database connection configuration")
+    if not db_uri:
+        print("Error: Database URI is required")
         print(
             "Set environment variables: DB_URL or (PGUSER, PGPASSWORD, PGHOST, PGPORT, PGDATABASE)"
         )
-        print("Or use --storage-type file for file-based storage")
         return 1
 
-    # Validate OpenAI API Key (required for database storage)
-    if args.storage_type == "database" and not OPENAI_API_KEY:
-        print("Error: Database storage requires OPENAI_API_KEY for embeddings")
-        print("Set it with: export OPENAI_API_KEY=your_api_key")
-        return 1
-
-    scraper = PostGISDocsScraper(
+    importer = PostGISDocsImporter(
         version=args.version,
-        storage_type=args.storage_type,
-        output_dir=args.output_dir,
         max_pages=args.max_pages,
         delay=args.delay,
-        db_uri=db_uri,
     )
 
-    scraper.run()
+    with psycopg.connect(db_uri) as conn:
+        importer.run(conn)
+
     return 0
 
 
