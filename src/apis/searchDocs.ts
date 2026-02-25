@@ -26,8 +26,9 @@ const inputSchema = {
     ),
   version: z
     .enum(versions)
+    .nullable()
     .describe(
-      'The PostgreSQL major version (ignored when searching "tiger"). Recommended to assume the latest version if unknown.',
+      'The PostgreSQL major version (ignored when searching "tiger"). Recommended to assume the latest version if unknown. Only applicable when source is Postgres. Defaults to latest version.',
     ),
   limit: z.coerce
     .number()
