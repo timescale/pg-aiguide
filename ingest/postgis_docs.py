@@ -28,6 +28,7 @@ from urllib.parse import urljoin, quote
 import tiktoken
 from typing import Optional
 import time
+from ingest.types import Chunk, Page
 
 THIS_DIR = Path(__file__).parent.resolve()
 load_dotenv(dotenv_path=THIS_DIR.parent / ".env")
@@ -65,26 +66,6 @@ REMOVE_SELECTORS = [
     ".toc",
     ".titlepage .abstract img",
 ]
-
-
-@dataclass
-class Page:
-    id: int
-    version: str
-    url: str
-    domain: str
-    filename: str
-    title: str = ""
-
-
-@dataclass
-class Chunk:
-    idx: int
-    header: str
-    header_path: list[str]
-    content: str
-    token_count: int = 0
-    subindex: int = 0
 
 
 class PostGISDocsScraper:
