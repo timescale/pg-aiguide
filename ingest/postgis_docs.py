@@ -14,7 +14,6 @@ Usage:
 import argparse
 import json
 import os
-import re
 import time
 from pathlib import Path
 from typing import Optional
@@ -27,10 +26,17 @@ from bs4 import BeautifulSoup
 from markdownify import markdownify
 from psycopg.sql import SQL, Identifier
 
-from ingest.constants import BUILD_DIR, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL, POSTGIS_BASE_URL, POSTGIS_DOMAIN
-from ingest.encoder import ENC
+from ingest.constants import (
+    BUILD_DIR,
+    EMBEDDING_DIMENSIONS,
+    EMBEDDING_MODEL,
+    OPENAI_API_KEY,
+    OPENAI_BASE_URL,
+    POSTGIS_BASE_URL,
+    POSTGIS_DOMAIN,
+)
 from ingest.types import Chunk, Page
-from ingest.utils import create_chunks
+from ingest.utils.chunking import chunk_markdown_lines
 
 # Pages to skip (index, table of contents, etc.)
 SKIP_PAGES = {
@@ -73,9 +79,9 @@ class PostGISDocsScraper:
         self.db_uri = db_uri
         self.base_url = f"{POSTGIS_BASE_URL}/manual-{version}/"
         self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": "Mozilla/5.0 (compatible; PostGISDocsScraper/1.0)"
-        })
+        self.session.headers.update(
+            {"User-Agent": "Mozilla/5.0 (compatible; PostGISDocsScraper/1.0)"}
+        )
         self.processed_urls: set[str] = set()
         self.pages_processed = 0
 
@@ -158,63 +164,15 @@ class PostGISDocsScraper:
         """Convert HTML to Markdown."""
         # Find main content area
         main_content = (
-            soup.find("div", class_="refentry") or
-            soup.find("div", class_="chapter") or
-            soup.find("div", class_="section") or
-            soup.find("div", class_="book") or
-            soup.find("body") or
-            soup
+            soup.find("div", class_="refentry")
+            or soup.find("div", class_="chapter")
+            or soup.find("div", class_="section")
+            or soup.find("div", class_="book")
+            or soup.find("body")
+            or soup
         )
 
         return markdownify(str(main_content), heading_style="ATX")
-
-    def chunk_markdown(self, markdown: str, page: Page) -> list[Chunk]:
-        """Split Markdown into chunks based on headers."""
-        chunks = []
-        header_pattern = re.compile(r"^(#{1,3}) (.+)$", re.MULTILINE)
-
-        # Simple header-based chunking
-        lines = markdown.split("\n")
-        current_chunk_lines = []
-        current_header = page.title
-        header_path = [page.title]
-        idx = 0
-
-        for line in lines:
-            match = header_pattern.match(line)
-            if match:
-                # Save current chunk
-                if current_chunk_lines:
-                    content = "\n".join(current_chunk_lines).strip()
-                    if content:
-                        chunks += create_chunks(
-                            idx=idx,
-                            header=current_header,
-                            header_path=header_path.copy(),
-                            content=content,
-                        )
-                        idx += 1
-
-                # Start new chunk
-                depth = len(match.group(1))
-                current_header = match.group(2).strip()
-                header_path = header_path[:depth-1] + [current_header]
-                current_chunk_lines = [line]
-            else:
-                current_chunk_lines.append(line)
-
-        # Save final chunk
-        if current_chunk_lines:
-            content = "\n".join(current_chunk_lines).strip()
-            if content:
-                chunks.append(Chunk(
-                    idx=idx,
-                    header=current_header,
-                    header_path=header_path.copy(),
-                    content=content,
-                ))
-
-        return chunks
 
     def save_to_file(self, page: Page, markdown: str, chunks: list[Chunk]) -> None:
         """Save content to file."""
@@ -294,12 +252,14 @@ chunks: {len(chunks)}
                     chunk.idx,
                     chunk.subindex,
                     chunk.content,
-                    json.dumps({
-                        "header": chunk.header,
-                        "header_path": chunk.header_path,
-                        "source_url": page.url,
-                        "token_count": chunk.token_count,
-                    }),
+                    json.dumps(
+                        {
+                            "header": chunk.header,
+                            "header_path": chunk.header_path,
+                            "source_url": page.url,
+                            "token_count": chunk.token_count,
+                        }
+                    ),
                     embedding,
                 ],
             )
@@ -358,13 +318,16 @@ chunks: {len(chunks)}
 
             # Rename indexes and constraints
             for table in ["postgis_pages", "postgis_chunks"]:
-                cur.execute("""
+                cur.execute(
+                    """
                     SELECT indexname
                     FROM pg_indexes
                     WHERE schemaname = 'docs'
                     AND tablename = %s
                     AND indexname LIKE %s
-                """, [table, '%_tmp_%'])
+                """,
+                    [table, "%_tmp_%"],
+                )
 
                 for row in cur.fetchall():
                     old_name = row[0]
@@ -377,19 +340,24 @@ chunks: {len(chunks)}
                     )
 
             # Rename foreign key constraints
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT conname
                 FROM pg_constraint
                 WHERE conrelid = to_regclass('docs.postgis_chunks')
                 AND contype = 'f'
                 AND conname LIKE %s
-            """, ['%_tmp_%'])
+            """,
+                ["%_tmp_%"],
+            )
 
             for row in cur.fetchall():
                 old_name = row[0]
                 new_name = old_name.replace("_tmp_", "_")
                 cur.execute(
-                    SQL("ALTER TABLE docs.postgis_chunks RENAME CONSTRAINT {old} TO {new}").format(
+                    SQL(
+                        "ALTER TABLE docs.postgis_chunks RENAME CONSTRAINT {old} TO {new}"
+                    ).format(
                         old=Identifier(old_name),
                         new=Identifier(new_name),
                     )
@@ -412,7 +380,7 @@ chunks: {len(chunks)}
         print(f"Found {len(pages)} pages to process")
 
         if self.max_pages:
-            pages = pages[:self.max_pages]
+            pages = pages[: self.max_pages]
             print(f"Limited to {len(pages)} pages")
 
         # Database connection (if needed)
@@ -450,7 +418,11 @@ chunks: {len(chunks)}
                 )
 
                 # Chunk processing
-                chunks = self.chunk_markdown(markdown, page)
+                chunks = chunk_markdown_lines(
+                    markdown.split("\n"),
+                    initial_header=page.title,
+                    initial_header_path=[page.title],
+                )
 
                 print(f"  Title: {title}")
                 print(f"  Chunks: {len(chunks)}")
@@ -465,7 +437,7 @@ chunks: {len(chunks)}
             if conn:
                 self.finalize_database(conn)
 
-            print(f"\n{'='*50}")
+            print(f"\n{'=' * 50}")
             print(f"Completed! Processed {self.pages_processed} pages.")
 
         finally:
@@ -487,7 +459,7 @@ def build_database_uri() -> Optional[str]:
 
     if all([pg_user, pg_password, pg_host, pg_port, pg_database]):
         # URL-encode password to handle special characters like '@'
-        encoded_password = quote(pg_password, safe='')
+        encoded_password = quote(pg_password, safe="")
         return f"postgresql://{pg_user}:{encoded_password}@{pg_host}:{pg_port}/{pg_database}"
 
     return None
@@ -506,7 +478,8 @@ Examples:
     )
 
     parser.add_argument(
-        "--version", "-v",
+        "--version",
+        "-v",
         required=True,
         help="PostGIS version to ingest (e.g., 3.5, 3.4)",
     )
@@ -519,19 +492,22 @@ Examples:
     )
 
     parser.add_argument(
-        "--output-dir", "-o",
+        "--output-dir",
+        "-o",
         type=Path,
         help="Output directory for file storage (default: build/postgis_<version>)",
     )
 
     parser.add_argument(
-        "--max-pages", "-m",
+        "--max-pages",
+        "-m",
         type=int,
         help="Maximum number of pages to process",
     )
 
     parser.add_argument(
-        "--delay", "-d",
+        "--delay",
+        "-d",
         type=float,
         default=1.0,
         help="Delay between requests in seconds (default: 1.0)",
@@ -548,7 +524,9 @@ Examples:
     db_uri = args.database_uri or build_database_uri()
     if args.storage_type == "database" and not db_uri:
         print("Error: Database storage requires database connection configuration")
-        print("Set environment variables: DB_URL or (PGUSER, PGPASSWORD, PGHOST, PGPORT, PGDATABASE)")
+        print(
+            "Set environment variables: DB_URL or (PGUSER, PGPASSWORD, PGHOST, PGPORT, PGDATABASE)"
+        )
         print("Or use --storage-type file for file-based storage")
         return 1
 

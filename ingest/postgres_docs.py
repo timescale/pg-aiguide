@@ -14,9 +14,17 @@ from bs4 import element as BeautifulSoupElement
 from markdownify import markdownify
 from psycopg.sql import SQL, Identifier
 
-from ingest.constants import BUILD_DIR, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, MAX_CHUNK_TOKENS, OPENAI_API_KEY, OPENAI_BASE_URL, POSTGRES_BASE_URL, THIS_DIR
-from ingest.encoder import ENC
+from ingest.constants import (
+    BUILD_DIR,
+    EMBEDDING_DIMENSIONS,
+    EMBEDDING_MODEL,
+    OPENAI_API_KEY,
+    OPENAI_BASE_URL,
+    POSTGRES_BASE_URL,
+    THIS_DIR,
+)
 from ingest.types import Chunk, Page
+from ingest.utils.chunking import chunk_markdown_lines
 
 POSTGRES_DIR = THIS_DIR / "postgres"
 SMGL_DIR = POSTGRES_DIR / "doc" / "src" / "sgml"
@@ -309,60 +317,6 @@ def insert_chunk(
     )
 
 
-def split_chunk(chunk: Chunk) -> list[Chunk]:
-    num_subchunks = (chunk.token_count // MAX_CHUNK_TOKENS) + 1
-    input_ids = ENC.encode(chunk.content)
-
-    tokens_per_chunk = len(input_ids) // num_subchunks
-
-    subchunks = []
-    subindex = 0
-    idx = 0
-    while idx < len(input_ids):
-        cur_idx = min(idx + tokens_per_chunk, len(input_ids))
-        chunk_ids = input_ids[idx:cur_idx]
-        if not chunk_ids:
-            break
-        decoded = ENC.decode(chunk_ids)
-        if decoded:
-            subchunks.append(
-                Chunk(
-                    idx=chunk.idx,
-                    header=chunk.header,
-                    header_path=chunk.header_path,
-                    content=decoded,
-                    token_count=len(chunk_ids),
-                    subindex=subindex,
-                )
-            )
-            subindex += 1
-        if cur_idx == len(input_ids):
-            break
-        idx += tokens_per_chunk
-    return subchunks
-
-
-def process_chunk(conn: psycopg.Connection, page: Page, chunk: Chunk) -> None:
-    if chunk.content == "":  # discard empty chunks
-        return
-
-    chunk.token_count = len(ENC.encode(chunk.content))
-    if chunk.token_count < 10:  # discard chunks that are too tiny to be useful
-        return
-
-    chunks = [chunk]
-
-    if chunk.token_count > MAX_CHUNK_TOKENS:
-        print(
-            f"Chunk {chunk.header} too large ({chunk.token_count} tokens), splitting..."
-        )
-        chunks = split_chunk(chunk)
-
-    for chunk in chunks:
-        insert_chunk(conn, page, chunk)
-    conn.commit()
-
-
 def chunk_files(conn: psycopg.Connection, version: int) -> None:
     # Capture index definitions before we drop/replace tables.
     chunks_index_defs = [
@@ -419,11 +373,13 @@ def chunk_files(conn: psycopg.Connection, version: int) -> None:
     )
     conn.commit()
 
-    header_pattern = re.compile("^(#{1,3}) .+$")
-    codeblock_pattern = re.compile("^```")
+    section_prefix = re.compile(r"^[A-Za-z0-9.]+\.\s*")
+    chapter_prefix = re.compile(r"^Chapter\s+[0-9]+\.\s*")
 
-    section_prefix = r"^[A-Za-z0-9.]+\.\s*"
-    chapter_prefix = r"^Chapter\s+[0-9]+\.\s*"
+    def postgres_header_transform(header: str) -> str:
+        header = re.sub(section_prefix, "", header).strip()
+        header = re.sub(chapter_prefix, "", header).strip()
+        return header
 
     page_count = 0
 
@@ -448,39 +404,16 @@ def chunk_files(conn: psycopg.Connection, version: int) -> None:
 
             insert_page(conn, page)
 
-            header_path = []
-            idx = 0
-            chunk: Chunk | None = None
-            in_codeblock = False
-            while True:
-                line = f.readline()
-                if line == "":
-                    if chunk is not None:
-                        process_chunk(conn, page, chunk)
-                    break
-                match = header_pattern.match(line)
-                if match is None or in_codeblock or (refentry and chunk is not None):
-                    assert chunk is not None
-                    if codeblock_pattern.match(line):
-                        in_codeblock = not in_codeblock
-                    chunk.content += line
-                    continue
-                header_hases = match.group(1)
-                depth = len(header_hases)
-                header_path = header_path[: (depth - 1)]
-                header = line.lstrip("#").strip()
-                header = re.sub(section_prefix, "", header).strip()
-                header = re.sub(chapter_prefix, "", header).strip()
-                header_path.append(header)
-                if chunk is not None:
-                    process_chunk(conn, page, chunk)
-                chunk = Chunk(
-                    idx=idx,
-                    header=header,
-                    header_path=header_path.copy(),
-                    content="",
-                )
-                idx += 1
+            chunks = chunk_markdown_lines(
+                f,
+                initial_header="",
+                initial_header_path=[],
+                refentry=refentry,
+                header_transform=postgres_header_transform,
+            )
+            for chunk in chunks:
+                insert_chunk(conn, page, chunk)
+            conn.commit()
             update_page_stats(conn, page)
             conn.commit()
 
