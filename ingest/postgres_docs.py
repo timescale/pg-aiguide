@@ -1,41 +1,27 @@
 import argparse
-from dataclasses import dataclass
-from dotenv import load_dotenv
-from bs4 import BeautifulSoup, element as BeautifulSoupElement
 import json
-from markdownify import markdownify
-import openai
 import os
-from pathlib import Path
-import psycopg
-from psycopg.sql import SQL, Identifier
 import re
 import shutil
 import subprocess
-import tiktoken
+from pathlib import Path
 from urllib.parse import quote
 
+import openai
+import psycopg
+from bs4 import BeautifulSoup
+from bs4 import element as BeautifulSoupElement
+from markdownify import markdownify
+from psycopg.sql import SQL, Identifier
 
-THIS_DIR = Path(__file__).parent.resolve()
-
-load_dotenv(dotenv_path=os.path.join(THIS_DIR, "..", ".env"))
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")  # Optional: custom API endpoint
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")  # Default model
-EMBEDDING_DIMENSIONS = 1536  # Fixed to match database schema
+from ingest.constants import BUILD_DIR, MAX_CHUNK_TOKENS, THIS_DIR
+from ingest.encoder import ENC
+from ingest.types import Chunk, Page
 
 POSTGRES_DIR = THIS_DIR / "postgres"
 SMGL_DIR = POSTGRES_DIR / "doc" / "src" / "sgml"
 HTML_DIR = SMGL_DIR / "html"
-BUILD_DIR = THIS_DIR / "build"
-BUILD_DIR.mkdir(exist_ok=True)
 MD_DIR = BUILD_DIR / "md"
-
-POSTGRES_BASE_URL = "https://www.postgresql.org/docs"
-
-ENC = tiktoken.get_encoding("cl100k_base")
-MAX_CHUNK_TOKENS = 7000
 
 
 def update_repo():
@@ -220,25 +206,6 @@ refentry: {is_refentry}
 ---
 {md_content}"""
         md_file.write_text(md_content, encoding="utf-8")
-
-
-@dataclass
-class Page:
-    id: int
-    version: int
-    url: str
-    domain: str
-    filename: str
-
-
-@dataclass
-class Chunk:
-    idx: int
-    header: str
-    header_path: list[str]
-    content: str
-    token_count: int = 0
-    subindex: int = 0
 
 
 def insert_page(
@@ -588,7 +555,7 @@ def main():
     update_repo()
     tag = get_version_tag(version)
     # URL-encode password to handle special characters like '@'
-    encoded_password = quote(os.environ['PGPASSWORD'], safe='')
+    encoded_password = quote(os.environ["PGPASSWORD"], safe="")
     db_uri = f"postgresql://{os.environ['PGUSER']}:{encoded_password}@{os.environ['PGHOST']}:{os.environ['PGPORT']}/{os.environ['PGDATABASE']}"
     with psycopg.connect(db_uri) as conn:
         print(f"Building Postgres {version} ({tag}) documentation...")

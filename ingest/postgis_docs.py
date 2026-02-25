@@ -12,40 +12,24 @@ Usage:
 """
 
 import argparse
-from dataclasses import dataclass
-from dotenv import load_dotenv
-from bs4 import BeautifulSoup
 import json
-from markdownify import markdownify
-import openai
 import os
-from pathlib import Path
-import psycopg
-from psycopg.sql import SQL, Identifier
 import re
-import requests
-from urllib.parse import urljoin, quote
-import tiktoken
-from typing import Optional
 import time
+from pathlib import Path
+from typing import Optional
+from urllib.parse import quote, urljoin
+
+import openai
+import psycopg
+import requests
+from bs4 import BeautifulSoup
+from markdownify import markdownify
+from psycopg.sql import SQL, Identifier
+
+from ingest.constants import BUILD_DIR, POSTGIS_BASE_URL
 from ingest.types import Chunk, Page
-
-THIS_DIR = Path(__file__).parent.resolve()
-load_dotenv(dotenv_path=THIS_DIR.parent / ".env")
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")  # Optional: custom API endpoint
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")  # Default model
-EMBEDDING_DIMENSIONS = 1536  # Fixed to match database schema
-BUILD_DIR = THIS_DIR / "build"
-BUILD_DIR.mkdir(exist_ok=True)
-
-POSTGIS_BASE_URL = "https://postgis.net/docs"
-POSTGIS_DOMAIN = "postgis.net"
-
-# Token counting using tiktoken
-ENC = tiktoken.get_encoding("cl100k_base")
-MAX_CHUNK_TOKENS = 7000
+from ingest.utils import create_chunks
 
 # Pages to skip (index, table of contents, etc.)
 SKIP_PAGES = {
