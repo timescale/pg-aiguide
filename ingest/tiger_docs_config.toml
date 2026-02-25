@@ -29,6 +29,8 @@
   "img[src*='caution.png']"    # Caution icons
 ]
 
+# Add more domains as needed
+
 # Default selectors applied to all domains
 [default_selectors]
 selectors = [
