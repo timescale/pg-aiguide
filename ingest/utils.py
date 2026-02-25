@@ -1,6 +1,6 @@
 import math
 
-from ingest.constants import MAX_CHUNK_TOKENS
+from ingest.constants import MAX_CHUNK_TOKENS, MIN_CHUNK_TOKENS
 from ingest.encoder import ENC
 from ingest.types import Chunk
 
@@ -14,6 +14,11 @@ def create_chunks(idx: int, header: str, header_path: str, content: str) -> list
         chunk_tokens = tokens[
             sub_idx * MAX_CHUNK_TOKENS : (sub_idx + 1) * MAX_CHUNK_TOKENS
         ]
+
+        # discard chunks that are too tiny to be useful
+        if len(chunk_tokens) < MIN_CHUNK_TOKENS:
+            continue
+
         chunk_content = ENC.decode(chunk_tokens)
         chunks.append(
             Chunk(
@@ -25,5 +30,5 @@ def create_chunks(idx: int, header: str, header_path: str, content: str) -> list
                 subindex=sub_idx,
             )
         )
-        
+
     return chunks

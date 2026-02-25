@@ -16,7 +16,8 @@ EMBEDDING_MODEL = os.getenv(
     "EMBEDDING_MODEL", "text-embedding-3-small"
 )  # Default model
 
-MAX_CHUNK_TOKENS = 7000
+MIN_CHUNK_TOKENS = 10 # anything less provides no value
+MAX_CHUNK_TOKENS = 8191
 EMBEDDING_DIMENSIONS = 1536  # Fixed to match database schema
 
 
