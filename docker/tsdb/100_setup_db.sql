@@ -11,6 +11,7 @@ WITH
 \c tsdb
 
 CREATE EXTENSION IF NOT EXISTS vector CASCADE;
+CREATE EXTENSION IF NOT EXISTS pg_textsearch;
 
 -- Create schema for docs
 CREATE SCHEMA IF NOT EXISTS docs AUTHORIZATION tsdbadmin;

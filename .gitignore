@@ -10,7 +10,8 @@ ingest/.venv
 .mcpregistry_*
 download/
 server.json
-.claude/
+.claude/*.local.*
+.opencode/plans
 
 # Temporary files directory
 tmp/

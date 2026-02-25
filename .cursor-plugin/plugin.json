@@ -1,0 +1,23 @@
+{
+  "name": "pg-aiguide",
+  "displayName": "PostgreSQL AI Guide",
+  "version": "0.3.1",
+  "description": "PostgreSQL documentation and best practices through semantic search and curated skills, including TimescaleDB and Tiger Cloud ecosystem tools.",
+  "author": {
+    "name": "TigerData",
+    "email": "support@tigerdata.com"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "postgresql",
+    "postgres",
+    "database",
+    "sql",
+    "timescaledb",
+    "tiger-cloud",
+    "documentation",
+    "best-practices",
+    "semantic-search"
+  ],
+  "logo": "assets/logo.svg"
+}
