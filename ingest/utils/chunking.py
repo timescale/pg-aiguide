@@ -38,6 +38,7 @@ def create_chunks(idx: int, header: str, header_path: str, content: str) -> list
 
 _HEADER_PATTERN = re.compile(r"^(#{1,6}) (.+)$")
 _CODEBLOCK_PATTERN = re.compile(r"^```")
+_MARKDOWN_LINK_PATTERN = re.compile(r"^\[.+\]\(.+\)$")
 
 
 def chunk_markdown_lines(
@@ -69,7 +70,8 @@ def chunk_markdown_lines(
     def flush() -> None:
         nonlocal idx
         content = "\n".join(current_chunk_lines).strip()
-        if content:
+        non_empty_lines = [l for l in content.splitlines() if l.strip()]
+        if content and not all(_MARKDOWN_LINK_PATTERN.match(l) for l in non_empty_lines):
             chunks.extend(
                 create_chunks(
                     idx=idx,
