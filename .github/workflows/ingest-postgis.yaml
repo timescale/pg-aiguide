@@ -1,13 +1,17 @@
-name: Ingest Tiger Docs
+name: Ingest PostGIS Docs
+run-name: Ingest PostGIS ${{ inputs.version }} Docs
 
 on:
-  schedule:
-    - cron: '0 2 * * 0'
   workflow_dispatch:
+    inputs:
+      version:
+        description: "PostGIS version to ingest (e.g. 3.3, 3.4, 3.5)"
+        required: true
+        default: "3.6"
 
 jobs:
   ingest-dev:
-    name: Ingest Tiger docs for Dev
+    name: Ingest PostGIS docs for Dev
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -34,13 +38,13 @@ jobs:
       - name: Install python dependencies
         run: uv sync
 
-      - name: Ingest Tiger docs
-        run: uv run python tiger_docs.py
+      - name: Ingest PostGIS ${{ github.event.inputs.version }} docs for dev
+        run: uv run python postgis_docs.py --version ${{ github.event.inputs.version }}
         env:
           PYTHONPATH: ..
 
   ingest-prod:
-    name: Ingest Tiger docs for Prod
+    name: Ingest PostGIS docs for Prod
     runs-on: ubuntu-latest
     defaults:
       run:

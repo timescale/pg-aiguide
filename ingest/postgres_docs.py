@@ -1,41 +1,26 @@
 import argparse
-from dataclasses import dataclass
-from dotenv import load_dotenv
-from bs4 import BeautifulSoup, element as BeautifulSoupElement
-import json
-from markdownify import markdownify
-import openai
 import os
-from pathlib import Path
-import psycopg
-from psycopg.sql import SQL, Identifier
 import re
 import shutil
 import subprocess
-import tiktoken
+from collections.abc import Iterable
+from pathlib import Path
 from urllib.parse import quote
 
-
-THIS_DIR = Path(__file__).parent.resolve()
-
-load_dotenv(dotenv_path=os.path.join(THIS_DIR, "..", ".env"))
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")  # Optional: custom API endpoint
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")  # Default model
-EMBEDDING_DIMENSIONS = 1536  # Fixed to match database schema
+import psycopg
+from bs4 import BeautifulSoup
+from ingest.document_importer import DocumentImporter, PageSource
+from ingest.constants import BUILD_DIR, POSTGRES_BASE_URL, THIS_DIR
+from ingest.types import Page
+from ingest.utils.beautiful_soup import (
+    extract_postgres_page_metadata,
+    postgres_html_to_markdown,
+)
 
 POSTGRES_DIR = THIS_DIR / "postgres"
 SMGL_DIR = POSTGRES_DIR / "doc" / "src" / "sgml"
 HTML_DIR = SMGL_DIR / "html"
-BUILD_DIR = THIS_DIR / "build"
-BUILD_DIR.mkdir(exist_ok=True)
 MD_DIR = BUILD_DIR / "md"
-
-POSTGRES_BASE_URL = "https://www.postgresql.org/docs"
-
-ENC = tiktoken.get_encoding("cl100k_base")
-MAX_CHUNK_TOKENS = 7000
 
 
 def update_repo():
@@ -46,6 +31,7 @@ def update_repo():
             check=True,
             env=os.environ,
             text=True,
+            cwd=THIS_DIR,
         )
     else:
         subprocess.run(
@@ -171,48 +157,12 @@ def build_markdown() -> None:
         )
 
         soup = BeautifulSoup(html_content, "html.parser")
-
-        is_refentry = bool(soup.find("div", class_="refentry"))
-
-        elem = soup.find("div", attrs={"id": True})
-        if elem and isinstance(elem, BeautifulSoupElement.Tag):
-            slug = str(elem["id"]).lower() + ".html"
-        else:
+        try:
+            title_text, slug, is_refentry = extract_postgres_page_metadata(soup)
+        except SystemError:
             raise SystemError(f"No div with id found in {html_file}")
 
-        title = soup.find("title")
-        title_text = (
-            str(title.string).strip()
-            if title and isinstance(title, BeautifulSoupElement.Tag)
-            else "PostgreSQL Documentation"
-        )
-        if title:
-            title.decompose()
-        for class_name in ["navheader", "navfooter"]:
-            for div in soup.find_all("div", class_=class_name):
-                div.decompose()
-
-        # Don't bother including refentry in the transform as we don't chunk
-        # them by headers anyway.
-        if not is_refentry:
-            # Convert h3 headings in admonitions to h4 so that we avoid
-            # chunking them.
-            for class_name in [
-                "caution",
-                "important",
-                "notice",
-                "warning",
-                "tip",
-                "note",
-            ]:
-                for div in soup.find_all("div", class_=class_name):
-                    if div is None or not isinstance(div, BeautifulSoupElement.Tag):
-                        continue
-                    h3 = div.find("h3")
-                    if h3 and isinstance(h3, BeautifulSoupElement.Tag):
-                        h3.name = "h4"
-
-        md_content = markdownify(str(soup), heading_style="ATX")
+        md_content = postgres_html_to_markdown(soup, is_refentry)
         md_content = f"""---
 title: {title_text}
 slug: {slug}
@@ -222,246 +172,24 @@ refentry: {is_refentry}
         md_file.write_text(md_content, encoding="utf-8")
 
 
-@dataclass
-class Page:
-    id: int
-    version: int
-    url: str
-    domain: str
-    filename: str
+_SECTION_PREFIX = re.compile(r"^[A-Za-z0-9.]+\.\s*")
+_CHAPTER_PREFIX = re.compile(r"^Chapter\s+[0-9]+\.\s*")
 
 
-@dataclass
-class Chunk:
-    idx: int
-    header: str
-    header_path: list[str]
-    content: str
-    token_count: int = 0
-    subindex: int = 0
+def _header_transform(header: str) -> str:
+    header = re.sub(_SECTION_PREFIX, "", header).strip()
+    header = re.sub(_CHAPTER_PREFIX, "", header).strip()
+    return header
 
 
-def insert_page(
-    conn: psycopg.Connection,
-    page: Page,
-) -> None:
-    print("inserting page", page.filename, page.url)
-    result = conn.execute(
-        "insert into docs.postgres_pages_tmp (version, url, domain, filename, content_length, chunks_count) values (%s,%s,%s,%s,%s,%s) RETURNING id",
-        [
-            page.version,
-            page.url,
-            page.domain,
-            page.filename,
-            0,
-            0,
-        ],
-    )
-    row = result.fetchone()
-    assert row is not None
-    page.id = row[0]
+class PostgresDocsImporter(DocumentImporter):
+    def __init__(self, version: int):
+        super().__init__(version, "postgres_pages", "postgres_chunks")
 
-
-def update_page_stats(
-    conn: psycopg.Connection,
-    page: Page,
-) -> None:
-    conn.execute(
-        """
-        update docs.postgres_pages_tmp p
-        set
-            content_length = coalesce(chunks_stats.total_length, 0),
-            chunks_count = coalesce(chunks_stats.chunks_count, 0)
-        from (
-            select
-                page_id,
-                sum(char_length(content)) as total_length,
-                count(*) as chunks_count
-            from docs.postgres_chunks_tmp
-            where page_id = %s
-            group by page_id
-        ) as chunks_stats
-        where p.id = chunks_stats.page_id and p.id = %s
-    """,
-        [page.id, page.id],
-    )
-
-
-def insert_chunk(
-    conn: psycopg.Connection,
-    page: Page,
-    chunk: Chunk,
-) -> None:
-    # Initialize OpenAI client with optional custom base URL
-    client_kwargs = {"api_key": OPENAI_API_KEY}
-    if OPENAI_BASE_URL:
-        client_kwargs["base_url"] = OPENAI_BASE_URL
-    client = openai.OpenAI(**client_kwargs)
-    content = ""
-    for i in range(len(chunk.header_path)):
-        content += (
-            "".join(["#" for _ in range(i + 1)]) + " " + chunk.header_path[i] + "\n\n"
-        )
-    content += chunk.content
-    embedding = (
-        client.embeddings.create(
-            model=EMBEDDING_MODEL,
-            input=chunk.content,
-            dimensions=EMBEDDING_DIMENSIONS,
-        )
-        .data[0]
-        .embedding
-    )
-    content = chunk.content
-    # token_count, embedding = embed(header_path, content)
-    print(f"header: {chunk.header}")
-    url = page.url
-    if len(chunk.header_path) > 1:
-        pattern = r"\((#\S+)\)"
-        match = re.search(pattern, chunk.header_path[-1])
-        if match:
-            url += match.group(1).lower()
-    conn.execute(
-        "insert into docs.postgres_chunks_tmp (page_id, chunk_index, sub_chunk_index, content, metadata, embedding) values (%s,%s,%s,%s,%s,%s)",
-        [
-            page.id,
-            chunk.idx,
-            chunk.subindex,
-            chunk.content,
-            json.dumps(
-                {
-                    "header": chunk.header,
-                    "header_path": chunk.header_path,
-                    "source_url": url,
-                    "token_count": chunk.token_count,
-                }
-            ),
-            embedding,
-        ],
-    )
-
-
-def split_chunk(chunk: Chunk) -> list[Chunk]:
-    num_subchunks = (chunk.token_count // MAX_CHUNK_TOKENS) + 1
-    input_ids = ENC.encode(chunk.content)
-
-    tokens_per_chunk = len(input_ids) // num_subchunks
-
-    subchunks = []
-    subindex = 0
-    idx = 0
-    while idx < len(input_ids):
-        cur_idx = min(idx + tokens_per_chunk, len(input_ids))
-        chunk_ids = input_ids[idx:cur_idx]
-        if not chunk_ids:
-            break
-        decoded = ENC.decode(chunk_ids)
-        if decoded:
-            subchunks.append(
-                Chunk(
-                    idx=chunk.idx,
-                    header=chunk.header,
-                    header_path=chunk.header_path,
-                    content=decoded,
-                    token_count=len(chunk_ids),
-                    subindex=subindex,
-                )
-            )
-            subindex += 1
-        if cur_idx == len(input_ids):
-            break
-        idx += tokens_per_chunk
-    return subchunks
-
-
-def process_chunk(conn: psycopg.Connection, page: Page, chunk: Chunk) -> None:
-    if chunk.content == "":  # discard empty chunks
-        return
-
-    chunk.token_count = len(ENC.encode(chunk.content))
-    if chunk.token_count < 10:  # discard chunks that are too tiny to be useful
-        return
-
-    chunks = [chunk]
-
-    if chunk.token_count > MAX_CHUNK_TOKENS:
-        print(
-            f"Chunk {chunk.header} too large ({chunk.token_count} tokens), splitting..."
-        )
-        chunks = split_chunk(chunk)
-
-    for chunk in chunks:
-        insert_chunk(conn, page, chunk)
-    conn.commit()
-
-
-def chunk_files(conn: psycopg.Connection, version: int) -> None:
-    # Capture index definitions before we drop/replace tables.
-    chunks_index_defs = [
-        row[0]
-        for row in conn.execute(
-            """
-            select indexdef
-            from pg_indexes
-            where schemaname = 'docs'
-            and tablename = 'postgres_chunks'
-            order by indexname
-        """
-        ).fetchall()
-    ]
-
-    conn.execute("drop table if exists docs.postgres_chunks_tmp")
-    conn.execute("drop table if exists docs.postgres_pages_tmp")
-
-    # Keep indexes (notably the unique id index) so that we can add a foreign key
-    # from chunks -> pages.
-    conn.execute(
-        "create table docs.postgres_pages_tmp (like docs.postgres_pages including all excluding constraints)"
-    )
-    conn.execute(
-        "insert into docs.postgres_pages_tmp select * from docs.postgres_pages where version != %s",
-        [version],
-    )
-
-    # Do not create BM25 (or other) indexes on the temp table until all inserts
-    # are complete; BM25 indexes can error during INSERT with:
-    # `index \"..._content_idx\" not found`.
-    conn.execute(
-        "create table docs.postgres_chunks_tmp (like docs.postgres_chunks including all excluding constraints excluding indexes)"
-    )
-    conn.execute(
-        "insert into docs.postgres_chunks_tmp select c.* from docs.postgres_chunks c inner join docs.postgres_pages p on c.page_id = p.id where p.version != %s",
-        [version],
-    )
-
-    conn.execute(
-        "alter table docs.postgres_chunks_tmp add foreign key (page_id) references docs.postgres_pages_tmp(id) on delete cascade"
-    )
-    conn.commit()
-
-    # We'll recreate the saved indexes after swapping tables.
-    index_defs_to_create = chunks_index_defs
-
-    # Reset the sequences for the temp tables
-    conn.execute(
-        "select setval(pg_get_serial_sequence('docs.postgres_chunks_tmp', 'id'), (select max(id) from docs.postgres_chunks_tmp))"
-    )
-    conn.execute(
-        "select setval(pg_get_serial_sequence('docs.postgres_pages_tmp', 'id'), (select max(id) from docs.postgres_pages_tmp))"
-    )
-    conn.commit()
-
-    header_pattern = re.compile("^(#{1,3}) .+$")
-    codeblock_pattern = re.compile("^```")
-
-    section_prefix = r"^[A-Za-z0-9.]+\.\s*"
-    chapter_prefix = r"^Chapter\s+[0-9]+\.\s*"
-
-    page_count = 0
-
-    for md in MD_DIR.glob("*.md"):
-        print(f"chunking {md}...")
-        with md.open() as f:
+    def get_pages(self) -> Iterable[PageSource]:
+        for md in MD_DIR.glob("*.md"):
+            print(f"chunking {md}...")
+            f = md.open()
             # process the frontmatter
             f.readline()
             f.readline()  # title line
@@ -471,111 +199,18 @@ def chunk_files(conn: psycopg.Connection, version: int) -> None:
 
             page = Page(
                 id=0,
-                version=version,
-                url=f"{POSTGRES_BASE_URL}/{version}/{slug}",
+                version=self.version,
+                url=f"{POSTGRES_BASE_URL}/{self.version}/{slug}",
                 domain="postgresql.org",
                 filename=md.name,
             )
-            page_count += 1
-
-            insert_page(conn, page)
-
-            header_path = []
-            idx = 0
-            chunk: Chunk | None = None
-            in_codeblock = False
-            while True:
-                line = f.readline()
-                if line == "":
-                    if chunk is not None:
-                        process_chunk(conn, page, chunk)
-                    break
-                match = header_pattern.match(line)
-                if match is None or in_codeblock or (refentry and chunk is not None):
-                    assert chunk is not None
-                    if codeblock_pattern.match(line):
-                        in_codeblock = not in_codeblock
-                    chunk.content += line
-                    continue
-                header_hases = match.group(1)
-                depth = len(header_hases)
-                header_path = header_path[: (depth - 1)]
-                header = line.lstrip("#").strip()
-                header = re.sub(section_prefix, "", header).strip()
-                header = re.sub(chapter_prefix, "", header).strip()
-                header_path.append(header)
-                if chunk is not None:
-                    process_chunk(conn, page, chunk)
-                chunk = Chunk(
-                    idx=idx,
-                    header=header,
-                    header_path=header_path.copy(),
-                    content="",
-                )
-                idx += 1
-            update_page_stats(conn, page)
-            conn.commit()
-
-    with conn.cursor() as cur:
-        cur.execute("drop table docs.postgres_chunks")
-        cur.execute("drop table docs.postgres_pages")
-        cur.execute("alter table docs.postgres_chunks_tmp rename to postgres_chunks")
-        cur.execute("alter table docs.postgres_pages_tmp rename to postgres_pages")
-
-        for index_def in index_defs_to_create:
-            cur.execute(index_def)
-
-        # the auto create foreign key and index names include the _tmp_ bit in their
-        # names, so we remove them so that they match the generated names for the
-        # renamed tables.
-        for table in ["postgres_pages", "postgres_chunks"]:
-            cur.execute(
-                """
-                select indexname
-                from pg_indexes
-                where schemaname = 'docs'
-                and tablename = %s
-                and indexname like %s
-            """,
-                [table, "%_tmp_%"],
+            yield PageSource(
+                page=page,
+                lines=f,
+                refentry=refentry,
+                header_transform=_header_transform,
             )
-            for row in cur.fetchall():
-                old_index_name = row[0]
-                new_index_name = old_index_name.replace("_tmp_", "_")
-                cur.execute(
-                    SQL(
-                        "alter index docs.{old_index_name} rename to {new_index_name}"
-                    ).format(
-                        old_index_name=Identifier(old_index_name),
-                        new_index_name=Identifier(new_index_name),
-                    )
-                )
-
-        cur.execute(
-            """
-            select conname
-            from pg_constraint
-            where conrelid = to_regclass(%s)
-            and contype = 'f'
-            and conname like %s
-        """,
-            ["docs.postgres_chunks", "%_tmp_%"],
-        )
-        for row in cur.fetchall():
-            old_fk_name = row[0]
-            new_fk_name = old_fk_name.replace("_tmp_", "_")
-            cur.execute(
-                SQL(
-                    "alter table docs.postgres_chunks rename constraint {old_fk_name} to {new_fk_name}"
-                ).format(
-                    old_fk_name=Identifier(old_fk_name),
-                    new_fk_name=Identifier(new_fk_name),
-                )
-            )
-
-    conn.commit()
-
-    print(f"Processed {page_count} pages.")
+            f.close()
 
 
 def main():
@@ -588,14 +223,14 @@ def main():
     update_repo()
     tag = get_version_tag(version)
     # URL-encode password to handle special characters like '@'
-    encoded_password = quote(os.environ['PGPASSWORD'], safe='')
+    encoded_password = quote(os.environ["PGPASSWORD"], safe="")
     db_uri = f"postgresql://{os.environ['PGUSER']}:{encoded_password}@{os.environ['PGHOST']}:{os.environ['PGPORT']}/{os.environ['PGDATABASE']}"
     with psycopg.connect(db_uri) as conn:
         print(f"Building Postgres {version} ({tag}) documentation...")
         checkout_tag(tag)
         build_html()
         build_markdown()
-        chunk_files(conn, version)
+        PostgresDocsImporter(version).run(conn)
 
 
 if __name__ == "__main__":

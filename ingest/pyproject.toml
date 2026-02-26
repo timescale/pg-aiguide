@@ -14,3 +14,44 @@ dependencies = [
     "scrapy>=2.13.3",
     "tiktoken>=0.11.0",
 ]
+
+[tool.ruff]
+line-length = 88
+indent-width = 4
+output-format = "grouped"
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # Pyflakes
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "I",    # isort
+    "ARG",  # unused arguments
+    "W291", # trailing whitespace
+    "PIE",  # print statements
+    "Q"     # flakes8-quote
+]
+ignore = ["E501"] # we use `ruff format` on everything, so this is just annoying
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.pyright]
+include = ["tiger_slack"]
+exclude = [".venv", "**/__pycache__"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+reportMissingParameterType = false
+reportUnnecessaryTypeIgnoreComment = false
+reportArgumentType = "none"
+reportGeneralTypeIssues = "warning"

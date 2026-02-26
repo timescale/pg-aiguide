@@ -1,0 +1,55 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "pg-aiguide MCP - bun: install",
+      "type": "shell",
+      "command": "./bun install",
+      "group": "build",
+      "detail": "Install pg-aiguide MCP server dependencies",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      }
+    },
+    {
+      "label": "pg-aiguide MCP - bun: build",
+      "type": "shell",
+      "command": "./bun run build",
+      "group": "build",
+      "detail": "Build the pg-aiguide MCP server",
+      "dependsOn": "pg-aiguide MCP - bun: install",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "problemMatcher": "$tsc"
+    },
+    {
+      "label": "pg-aiguide MCP - Build Only",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "pg-aiguide MCP - bun: install",
+        "pg-aiguide MCP - bun: build"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}

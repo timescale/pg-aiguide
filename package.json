@@ -1,6 +1,6 @@
 {
   "name": "@tigerdata/pg-aiguide",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Comprehensive PostgreSQL documentation and best practices through semantic search and curated skills, including ecosystem tools like TimescaleDB and Tiger Cloud",
   "license": "Apache-2.0",
   "author": "TigerData",
@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.80",
-    "@tigerdata/mcp-boilerplate": "^1.0.1",
+    "@tigerdata/mcp-boilerplate": "^1.1.0",
     "ai": "^5.0.108",
     "dotenv": "^17.2.3",
     "gray-matter": "^4.0.3",
@@ -45,6 +45,7 @@
     "@types/semver": "^7.7.1",
     "semver": "^7.7.4",
     "shx": "^0.4.0",
+    "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }
 }

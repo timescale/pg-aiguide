@@ -1,43 +1,46 @@
-from scrapy.spiders import SitemapSpider
-from scrapy.crawler import CrawlerProcess
-from scrapy.utils.project import get_project_settings
-from bs4 import BeautifulSoup
-from markdownify import markdownify as md
+import argparse
+import hashlib
+import json
 import os
 import re
 import sys
-import argparse
-import asyncio
-import time
-from urllib.parse import urlparse, urljoin, quote
-import hashlib
-import requests
-import json
-import psycopg
-from psycopg.sql import SQL, Identifier
-import openai
 import tomllib
-from dotenv import load_dotenv, find_dotenv
-from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+from urllib.parse import urljoin, urlparse
+
+import openai
+import psycopg
+import requests
+from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+from ingest.constants import (
+    EMBEDDING_DIMENSIONS,
+    EMBEDDING_MODEL,
+    OPENAI_API_KEY,
+    OPENAI_BASE_URL,
+)
+from ingest.utils.db import build_database_uri
+from langchain_text_splitters import (
+    MarkdownHeaderTextSplitter,
+    RecursiveCharacterTextSplitter,
+)
+from markdownify import markdownify as md
+from psycopg.sql import SQL, Identifier
+from scrapy.crawler import CrawlerProcess
+from scrapy.spiders import SitemapSpider
+from scrapy.utils.project import get_project_settings
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
-if not os.path.exists(os.path.join(script_dir, 'build')):
-    os.makedirs(os.path.join(script_dir, 'build'))
+if not os.path.exists(os.path.join(script_dir, "build")):
+    os.makedirs(os.path.join(script_dir, "build"))
 
-load_dotenv(dotenv_path=os.path.join(script_dir, '..', '.env'))
-schema = 'docs'
+load_dotenv(dotenv_path=os.path.join(script_dir, "..", ".env"))
+schema = "docs"
 
-# OpenAI configuration with optional custom endpoint and model
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL')  # Optional: custom API endpoint
-EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'text-embedding-3-small')  # Default model
-EMBEDDING_DIMENSIONS = 1536  # Fixed to match database schema
-
-with open(os.path.join(script_dir, 'tiger_docs_config.toml'), 'rb') as config_fp:
+with open(os.path.join(script_dir, "tiger_docs_config.toml"), "rb") as config_fp:
     config = tomllib.load(config_fp)
-    DOMAIN_SELECTORS = config['domain_selectors']
-    DEFAULT_SELECTORS = config['default_selectors']
+    DOMAIN_SELECTORS = config["domain_selectors"]
+    DEFAULT_SELECTORS = config["default_selectors"]
 
 
 def add_header_breadcrumbs_to_content(content, metadata):
@@ -46,22 +49,23 @@ def add_header_breadcrumbs_to_content(content, metadata):
 
     # Find the deepest header level present in metadata
     present_headers = []
-    for level in ['Header 1', 'Header 2', 'Header 3']:
+    for level in ["Header 1", "Header 2", "Header 3"]:
         if level in metadata:
             present_headers.append(level)
 
     # Add all headers except the last one (to avoid duplication with chunk content)
     for level in present_headers[:-1]:
         header_level = level.split()[-1]  # Get "1", "2", "3"
-        header_prefix = '#' * int(header_level)
+        header_prefix = "#" * int(header_level)
         breadcrumbs.append(f"{header_prefix} {metadata[level]}")
 
     # Combine breadcrumbs with chunk content
     if breadcrumbs:
-        breadcrumb_text = '\n'.join(breadcrumbs) + '\n\n'
+        breadcrumb_text = "\n".join(breadcrumbs) + "\n\n"
         return breadcrumb_text + content
     else:
         return content
+
 
 class DatabaseManager:
     """Handles PostgreSQL database interactions for storing scraped content"""
@@ -78,11 +82,31 @@ class DatabaseManager:
 
     def initialize(self):
         with self.connection.cursor() as cursor:
-            cursor.execute(SQL("DROP TABLE IF EXISTS {schema}.timescale_chunks_tmp").format(schema=Identifier(schema)))
-            cursor.execute(SQL("DROP TABLE IF EXISTS {schema}.timescale_pages_tmp").format(schema=Identifier(schema)))
-            cursor.execute(SQL("CREATE TABLE {schema}.timescale_pages_tmp (LIKE {schema}.timescale_pages INCLUDING ALL EXCLUDING CONSTRAINTS)").format(schema=Identifier(schema)))
-            cursor.execute(SQL("CREATE TABLE {schema}.timescale_chunks_tmp (LIKE {schema}.timescale_chunks INCLUDING ALL EXCLUDING CONSTRAINTS)").format(schema=Identifier(schema)))
-            cursor.execute(SQL("ALTER TABLE {schema}.timescale_chunks_tmp ADD FOREIGN KEY (page_id) REFERENCES {schema}.timescale_pages_tmp(id) ON DELETE CASCADE").format(schema=Identifier(schema)))
+            cursor.execute(
+                SQL("DROP TABLE IF EXISTS {schema}.timescale_chunks_tmp").format(
+                    schema=Identifier(schema)
+                )
+            )
+            cursor.execute(
+                SQL("DROP TABLE IF EXISTS {schema}.timescale_pages_tmp").format(
+                    schema=Identifier(schema)
+                )
+            )
+            cursor.execute(
+                SQL(
+                    "CREATE TABLE {schema}.timescale_pages_tmp (LIKE {schema}.timescale_pages INCLUDING ALL EXCLUDING CONSTRAINTS)"
+                ).format(schema=Identifier(schema))
+            )
+            cursor.execute(
+                SQL(
+                    "CREATE TABLE {schema}.timescale_chunks_tmp (LIKE {schema}.timescale_chunks INCLUDING ALL EXCLUDING CONSTRAINTS)"
+                ).format(schema=Identifier(schema))
+            )
+            cursor.execute(
+                SQL(
+                    "ALTER TABLE {schema}.timescale_chunks_tmp ADD FOREIGN KEY (page_id) REFERENCES {schema}.timescale_pages_tmp(id) ON DELETE CASCADE"
+                ).format(schema=Identifier(schema))
+            )
 
             # The bm25 indexes have a bug that prevent inserting data into a table
             # underneath non-public schemas that has them, so we need to make remove
@@ -114,10 +138,26 @@ class DatabaseManager:
     def finalize(self):
         """Rename the temporary tables and their indexes to the final names, dropping the old tables if they exist"""
         with self.connection.cursor() as cursor:
-            cursor.execute(SQL("DROP TABLE IF EXISTS {schema}.timescale_chunks").format(schema=Identifier(schema)))
-            cursor.execute(SQL("DROP TABLE IF EXISTS {schema}.timescale_pages").format(schema=Identifier(schema)))
-            cursor.execute(SQL("ALTER TABLE {schema}.timescale_chunks_tmp RENAME TO timescale_chunks").format(schema=Identifier(schema)))
-            cursor.execute(SQL("ALTER TABLE {schema}.timescale_pages_tmp RENAME TO timescale_pages").format(schema=Identifier(schema)))
+            cursor.execute(
+                SQL("DROP TABLE IF EXISTS {schema}.timescale_chunks").format(
+                    schema=Identifier(schema)
+                )
+            )
+            cursor.execute(
+                SQL("DROP TABLE IF EXISTS {schema}.timescale_pages").format(
+                    schema=Identifier(schema)
+                )
+            )
+            cursor.execute(
+                SQL(
+                    "ALTER TABLE {schema}.timescale_chunks_tmp RENAME TO timescale_chunks"
+                ).format(schema=Identifier(schema))
+            )
+            cursor.execute(
+                SQL(
+                    "ALTER TABLE {schema}.timescale_pages_tmp RENAME TO timescale_pages"
+                ).format(schema=Identifier(schema))
+            )
 
             # the auto create foreign key and index names include the _tmp_ bit in their
             # names, so we remove them so that they match the generated names for the
@@ -131,7 +171,7 @@ class DatabaseManager:
                     and tablename = %s
                     and indexname like %s
                 """,
-                    [schema, table, '%_tmp_%'],
+                    [schema, table, "%_tmp_%"],
                 )
                 for row in cursor.fetchall():
                     old_index_name = row[0]
@@ -154,7 +194,7 @@ class DatabaseManager:
                     and contype = 'f'
                     and conname like %s
                 """).format(schema=Identifier(schema)),
-                [f"{schema}.timescale_chunks", '%_tmp_%'],
+                [f"{schema}.timescale_chunks", "%_tmp_%"],
             )
             for row in cursor.fetchall():
                 old_fk_name = row[0]
@@ -174,14 +214,17 @@ class DatabaseManager:
 
         self.connection.commit()
 
-    def save_page(self, url, domain, filename, content_length, chunking_method='header'):
+    def save_page(
+        self, url, domain, filename, content_length, chunking_method="header"
+    ):
         """Save page information and return the page ID"""
         try:
             with (
                 self.connection.cursor() as cursor,
                 self.connection.transaction() as _,
             ):
-                cursor.execute(SQL("""
+                cursor.execute(
+                    SQL("""
                     INSERT INTO {schema}.timescale_pages_tmp (url, domain, filename, content_length, chunking_method)
                     VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (url) DO UPDATE SET
@@ -189,12 +232,19 @@ class DatabaseManager:
                         chunking_method = EXCLUDED.chunking_method,
                         scraped_at = CURRENT_TIMESTAMP
                     RETURNING id
-                """).format(schema=Identifier(schema)), (url, domain, filename, content_length, chunking_method))
+                """).format(schema=Identifier(schema)),
+                    (url, domain, filename, content_length, chunking_method),
+                )
 
                 page_id = cursor.fetchone()[0]
 
                 # Delete existing chunks for this page (in case of re-scraping)
-                cursor.execute(SQL("DELETE FROM {schema}.timescale_chunks WHERE page_id = %s").format(schema=Identifier(schema)), (page_id,))
+                cursor.execute(
+                    SQL(
+                        "DELETE FROM {schema}.timescale_chunks WHERE page_id = %s"
+                    ).format(schema=Identifier(schema)),
+                    (page_id,),
+                )
 
                 return page_id
 
@@ -230,13 +280,11 @@ class DatabaseManager:
 
             for chunk in chunks:
                 content_with_breadcrumbs = add_header_breadcrumbs_to_content(
-                    chunk['content'],
-                    chunk['metadata']
+                    chunk["content"], chunk["metadata"]
                 )
-                processed_chunks.append({
-                    'content': content_with_breadcrumbs,
-                    'metadata': chunk['metadata']
-                })
+                processed_chunks.append(
+                    {"content": content_with_breadcrumbs, "metadata": chunk["metadata"]}
+                )
                 chunk_texts.append(content_with_breadcrumbs)
 
             # Generate embeddings for all chunks in batch
@@ -247,24 +295,30 @@ class DatabaseManager:
                 self.connection.transaction() as _,
             ):
                 for chunk, embedding in zip(processed_chunks, embeddings):
-                    cursor.execute(SQL("""
+                    cursor.execute(
+                        SQL("""
                         INSERT INTO {schema}.timescale_chunks_tmp (page_id, chunk_index, sub_chunk_index, content, metadata, embedding)
                         VALUES (%s, %s, %s, %s, %s, %s)
-                    """).format(schema=Identifier(schema)), (
-                        page_id,
-                        chunk['metadata'].get('chunk_index', 0),
-                        chunk['metadata'].get('sub_chunk_index', 0),
-                        chunk['content'],
-                        json.dumps(chunk['metadata']),
-                        embedding
-                    ))
+                    """).format(schema=Identifier(schema)),
+                        (
+                            page_id,
+                            chunk["metadata"].get("chunk_index", 0),
+                            chunk["metadata"].get("sub_chunk_index", 0),
+                            chunk["content"],
+                            json.dumps(chunk["metadata"]),
+                            embedding,
+                        ),
+                    )
 
                 # Update chunks count in pages table
-                cursor.execute(SQL("""
+                cursor.execute(
+                    SQL("""
                     UPDATE {schema}.timescale_pages_tmp
                     SET chunks_count = %s
                     WHERE id = %s
-                """).format(schema=Identifier(schema)), (len(chunks), page_id))
+                """).format(schema=Identifier(schema)),
+                    (len(chunks), page_id),
+                )
 
         except Exception as e:
             raise RuntimeError(f"Failed to save chunks for page {page_id}: {e}")
@@ -272,7 +326,11 @@ class DatabaseManager:
     def get_scraped_page_count(self):
         """Get the number of pages scraped into the temporary tables"""
         with self.connection.cursor() as cursor:
-            cursor.execute(SQL("SELECT COUNT(*) FROM {schema}.timescale_pages_tmp").format(schema=Identifier(schema)))
+            cursor.execute(
+                SQL("SELECT COUNT(*) FROM {schema}.timescale_pages_tmp").format(
+                    schema=Identifier(schema)
+                )
+            )
             return cursor.fetchone()[0]
 
     def close(self):
@@ -280,10 +338,11 @@ class DatabaseManager:
         if self.connection:
             self.connection.close()
 
+
 class FileManager:
     """Handles file-based storage for scraped content"""
 
-    def __init__(self, output_dir='scraped_docs'):
+    def __init__(self, output_dir="scraped_docs"):
         self.output_dir = output_dir
         # Create output directory if it doesn't exist
         os.makedirs(self.output_dir, exist_ok=True)
@@ -298,23 +357,22 @@ class FileManager:
 
         for i, chunk in enumerate(chunks):
             # Add chunk delimiter
-            chunked_markdown += f"---\n<!-- CHUNK {i+1}/{len(chunks)} -->\n"
+            chunked_markdown += f"---\n<!-- CHUNK {i + 1}/{len(chunks)} -->\n"
 
             # Add metadata as comments
-            if chunk['metadata']:
+            if chunk["metadata"]:
                 chunked_markdown += f"<!-- Metadata: {chunk['metadata']} -->\n"
 
             chunked_markdown += "---\n\n"
 
             # Add header breadcrumbs and content
             content_with_breadcrumbs = add_header_breadcrumbs_to_content(
-                chunk['content'],
-                chunk['metadata']
+                chunk["content"], chunk["metadata"]
             )
             chunked_markdown += content_with_breadcrumbs
             chunked_markdown += "\n\n"
 
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             f.write(chunked_markdown)
 
         return filepath
@@ -323,17 +381,31 @@ class FileManager:
         """Save regular markdown content to a file"""
         filepath = os.path.join(self.output_dir, filename)
 
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             f.write(f"# Source: {url}\n\n")
             f.write(content)
 
         return filepath
 
-class SitemapMarkdownSpider(SitemapSpider):
-    name = 'sitemap_markdown'
 
-    def __init__(self, domain=None, output_dir='scraped_docs', max_pages=None, strip_data_images=True, chunk_content=True, chunking_method='header', db_manager=None, file_manager=None, url_prefix=None, *args, **kwargs):
-        super(SitemapMarkdownSpider, self).__init__(*args, **kwargs)
+class SitemapMarkdownSpider(SitemapSpider):
+    name = "sitemap_markdown"
+
+    def __init__(
+        self,
+        domain=None,
+        output_dir="scraped_docs",
+        max_pages=None,
+        strip_data_images=True,
+        chunk_content=True,
+        chunking_method="header",
+        db_manager=None,
+        file_manager=None,
+        url_prefix=None,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
 
         if not domain:
             raise ValueError("domain parameter is required")
@@ -341,11 +413,21 @@ class SitemapMarkdownSpider(SitemapSpider):
         self.domain = domain
         self.output_dir = output_dir
         self.max_pages = int(max_pages) if max_pages else None
-        self.should_strip_data_images = strip_data_images if isinstance(strip_data_images, bool) else strip_data_images.lower() == 'true'
-        self.should_chunk_content = chunk_content if isinstance(chunk_content, bool) else chunk_content.lower() == 'true'
+        self.should_strip_data_images = (
+            strip_data_images
+            if isinstance(strip_data_images, bool)
+            else strip_data_images.lower() == "true"
+        )
+        self.should_chunk_content = (
+            chunk_content
+            if isinstance(chunk_content, bool)
+            else chunk_content.lower() == "true"
+        )
         self.chunking_method = chunking_method  # 'header' or 'semantic'
         self.allowed_domains = [domain]
-        self.url_prefix = url_prefix  # e.g., '/docs' to only scrape URLs under that path
+        self.url_prefix = (
+            url_prefix  # e.g., '/docs' to only scrape URLs under that path
+        )
 
         # Use passed-in storage managers
         self.db_manager = db_manager
@@ -366,7 +448,9 @@ class SitemapMarkdownSpider(SitemapSpider):
         """Initialize OpenAI embedding model for database storage"""
         try:
             if not OPENAI_API_KEY:
-                raise ValueError("OPENAI_API_KEY environment variable is required for database storage with embeddings")
+                raise ValueError(
+                    "OPENAI_API_KEY environment variable is required for database storage with embeddings"
+                )
 
             self.logger.info("Initializing OpenAI embedding client")
             # Initialize client with optional custom base URL
@@ -386,13 +470,13 @@ class SitemapMarkdownSpider(SitemapSpider):
                 def get_text_embeddings(self, texts):
                     """Generate embeddings for a batch of texts"""
                     response = self.client.embeddings.create(
-                        input=texts,
-                        model=self.model,
-                        dimensions=self.dimensions
+                        input=texts, model=self.model, dimensions=self.dimensions
                     )
                     return [embedding.embedding for embedding in response.data]
 
-            self.logger.info(f"Using embedding model: {EMBEDDING_MODEL} (dimensions: {EMBEDDING_DIMENSIONS})")
+            self.logger.info(
+                f"Using embedding model: {EMBEDDING_MODEL} (dimensions: {EMBEDDING_DIMENSIONS})"
+            )
             return OpenAIEmbeddingWrapper(client, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS)
 
         except Exception as e:
@@ -403,60 +487,62 @@ class SitemapMarkdownSpider(SitemapSpider):
         sitemap_urls = []
 
         # Try to get sitemaps from robots.txt
-        robots_url = f'https://{domain}/robots.txt'
+        robots_url = f"https://{domain}/robots.txt"
         try:
-            self.logger.info(f'Checking robots.txt at: {robots_url}')
+            self.logger.info(f"Checking robots.txt at: {robots_url}")
             response = requests.get(robots_url, timeout=10)
             response.raise_for_status()
 
             # Parse robots.txt for sitemap entries
-            for line in response.text.split('\n'):
+            for line in response.text.split("\n"):
                 line = line.strip()
-                if line.lower().startswith('sitemap:'):
-                    sitemap_url = line.split(':', 1)[1].strip()
+                if line.lower().startswith("sitemap:"):
+                    sitemap_url = line.split(":", 1)[1].strip()
                     # Handle relative URLs
-                    if not sitemap_url.startswith('http'):
-                        sitemap_url = urljoin(f'https://{domain}/', sitemap_url)
+                    if not sitemap_url.startswith("http"):
+                        sitemap_url = urljoin(f"https://{domain}/", sitemap_url)
                     # Filter to only include docs sitemaps if url_prefix is set
                     if self.url_prefix:
                         if self.url_prefix in sitemap_url:
                             sitemap_urls.append(sitemap_url)
-                            self.logger.info(f'Found docs sitemap in robots.txt: {sitemap_url}')
+                            self.logger.info(
+                                f"Found docs sitemap in robots.txt: {sitemap_url}"
+                            )
                     else:
                         sitemap_urls.append(sitemap_url)
-                        self.logger.info(f'Found sitemap in robots.txt: {sitemap_url}')
+                        self.logger.info(f"Found sitemap in robots.txt: {sitemap_url}")
 
         except Exception as e:
-            self.logger.warning(f'Could not fetch robots.txt from {robots_url}: {e}')
+            self.logger.warning(f"Could not fetch robots.txt from {robots_url}: {e}")
 
         # If no sitemaps found in robots.txt, try common locations
         if not sitemap_urls:
             common_sitemap_locations = [
-                f'https://{domain}/sitemap.xml',
-                f'https://{domain}/sitemap_index.xml',
-                f'https://{domain}/sitemap.txt'
+                f"https://{domain}/sitemap.xml",
+                f"https://{domain}/sitemap_index.xml",
+                f"https://{domain}/sitemap.txt",
             ]
             # If url_prefix is set, also try prefix-specific sitemaps
             if self.url_prefix:
                 common_sitemap_locations = [
-                    f'https://{domain}{self.url_prefix}/sitemap.xml',
-                    f'https://{domain}{self.url_prefix}/sitemap-0.xml',
+                    f"https://{domain}{self.url_prefix}/sitemap.xml",
+                    f"https://{domain}{self.url_prefix}/sitemap-0.xml",
                 ] + common_sitemap_locations
 
             for sitemap_url in common_sitemap_locations:
                 try:
-                    self.logger.info(f'Trying common sitemap location: {sitemap_url}')
+                    self.logger.info(f"Trying common sitemap location: {sitemap_url}")
                     response = requests.head(sitemap_url, timeout=10)
                     if response.status_code == 200:
                         sitemap_urls.append(sitemap_url)
-                        self.logger.info(f'Found sitemap at: {sitemap_url}')
+                        self.logger.info(f"Found sitemap at: {sitemap_url}")
                         break
                 except Exception as e:
-                    self.logger.debug(f'Sitemap not found at {sitemap_url}: {e}')
+                    self.logger.debug(f"Sitemap not found at {sitemap_url}: {e}")
 
         # If still no sitemap found, return empty list and let Scrapy handle the error
         if not sitemap_urls:
-            self.logger.error(f'No sitemap found for domain: {domain}')
+            self.logger.error(f"No sitemap found for domain: {domain}")
 
         return sitemap_urls
 
@@ -472,7 +558,7 @@ class SitemapMarkdownSpider(SitemapSpider):
                     selectors = known_selectors.copy()
                     break
 
-        self.logger.info(f'Using ignore selectors for {domain}: {selectors}')
+        self.logger.info(f"Using ignore selectors for {domain}: {selectors}")
         return selectors
 
     def strip_data_images(self, soup):
@@ -480,13 +566,13 @@ class SitemapMarkdownSpider(SitemapSpider):
         data_images_removed = 0
 
         # Only remove img tags with data: src
-        for img in soup.find_all('img', src=True):
-            if img['src'].startswith('data:'):
+        for img in soup.find_all("img", src=True):
+            if img["src"].startswith("data:"):
                 img.decompose()
                 data_images_removed += 1
 
         if data_images_removed > 0:
-            self.logger.debug(f'Removed {data_images_removed} data: images')
+            self.logger.debug(f"Removed {data_images_removed} data: images")
 
         return soup
 
@@ -496,19 +582,19 @@ class SitemapMarkdownSpider(SitemapSpider):
 
         # Map of h6 text to admonition types
         admonition_map = {
-            'warning': ':warning:',
-            'note': ':information_source:',
-            'tip': ':bulb:',
-            'important': ':exclamation:',
-            'caution': ':warning:',
-            'danger': ':no_entry:',
-            'info': ':information_source:',
-            'example': ':memo:',
-            'see also': ':point_right:',
+            "warning": ":warning:",
+            "note": ":information_source:",
+            "tip": ":bulb:",
+            "important": ":exclamation:",
+            "caution": ":warning:",
+            "danger": ":no_entry:",
+            "info": ":information_source:",
+            "example": ":memo:",
+            "see also": ":point_right:",
         }
 
-        for callout_div in soup.find_all('div', class_='callout'):
-            h6 = callout_div.find('h6')
+        for callout_div in soup.find_all("div", class_="callout"):
+            h6 = callout_div.find("h6")
             if not h6:
                 continue
 
@@ -523,13 +609,13 @@ class SitemapMarkdownSpider(SitemapSpider):
 
             # Default to info if no match
             if not admonition_icon:
-                admonition_icon = ':information_source:'
+                admonition_icon = ":information_source:"
 
             # Create blockquote with icon and h6 text
-            blockquote = soup.new_tag('blockquote')
+            blockquote = soup.new_tag("blockquote")
 
             # Add the h6 text with icon as first paragraph
-            header_p = soup.new_tag('p')
+            header_p = soup.new_tag("p")
             header_p.string = f"{admonition_icon} {h6.get_text().strip()}"
             blockquote.append(header_p)
 
@@ -546,7 +632,9 @@ class SitemapMarkdownSpider(SitemapSpider):
             callouts_converted += 1
 
         if callouts_converted > 0:
-            self.logger.debug(f'Converted {callouts_converted} callout divs to admonitions')
+            self.logger.debug(
+                f"Converted {callouts_converted} callout divs to admonitions"
+            )
 
         return soup
 
@@ -555,15 +643,15 @@ class SitemapMarkdownSpider(SitemapSpider):
         code_blocks_cleaned = 0
 
         # Find code blocks with token-line structure
-        for code_container in soup.find_all(['pre', 'code']):
-            token_lines = code_container.find_all('div', class_='token-line')
+        for code_container in soup.find_all(["pre", "code"]):
+            token_lines = code_container.find_all("div", class_="token-line")
 
             if token_lines:
                 # Extract text from each token line and join with newlines
                 lines = []
                 for line_div in token_lines:
                     # Get text content from line-content span or the div itself
-                    line_content = line_div.find(attrs={'data-line_content': 'true'})
+                    line_content = line_div.find(attrs={"data-line_content": "true"})
                     if line_content:
                         lines.append(line_content.get_text())
                     else:
@@ -571,11 +659,11 @@ class SitemapMarkdownSpider(SitemapSpider):
 
                 # Replace the complex structure with simple text
                 code_container.clear()
-                code_container.string = '\n'.join(lines)
+                code_container.string = "\n".join(lines)
                 code_blocks_cleaned += 1
 
         if code_blocks_cleaned > 0:
-            self.logger.debug(f'Cleaned {code_blocks_cleaned} code blocks')
+            self.logger.debug(f"Cleaned {code_blocks_cleaned} code blocks")
 
         return soup
 
@@ -584,35 +672,33 @@ class SitemapMarkdownSpider(SitemapSpider):
         import re
 
         # Pattern to match markdown links that are internal anchors: [text](#anchor)
-        anchor_pattern = r'\[([^\]]+)\]\(#([^)]+)\)'
+        anchor_pattern = r"\[([^\]]+)\]\(#([^)]+)\)"
 
         anchors = []
         for match in re.finditer(anchor_pattern, text):
             link_text = match.group(1)
             anchor_id = match.group(2)
 
-            anchors.append({
-                'text': link_text,
-                'anchor': anchor_id
-            })
+            anchors.append({"text": link_text, "anchor": anchor_id})
 
         return anchors
-
 
     def semantic_chunk_with_openai(self, markdown_text, url):
         """Use OpenAI to identify semantic boundaries for chunking using split identifiers"""
         try:
             # Initialize OpenAI client
-            client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+            client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
             # Split text into lines for LLM processing
-            lines = markdown_text.split('\n')
-            small_chunks = [line for line in lines if line.strip()]  # Filter out empty lines
+            lines = markdown_text.split("\n")
+            small_chunks = [
+                line for line in lines if line.strip()
+            ]  # Filter out empty lines
 
             # Add chunk identifiers
-            chunked_input = ''
+            chunked_input = ""
             for i, chunk in enumerate(small_chunks):
-                chunked_input += f"<|start_chunk_{i+1}|>{chunk}<|end_chunk_{i+1}|>"
+                chunked_input += f"<|start_chunk_{i + 1}|>{chunk}<|end_chunk_{i + 1}|>"
 
             # Create prompt for semantic boundary identification
             system_prompt = """You are an assistant specialized in splitting text into thematically consistent sections.
@@ -638,10 +724,10 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
                 model="gpt-4o",  # Use cost-effective model
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.1,  # Low temperature for consistent results
-                max_tokens=300
+                max_tokens=300,
             )
 
             # Parse response to get split positions
@@ -650,24 +736,30 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
             # Extract numbers from response
             try:
                 # Find the line containing split_after
-                split_after_lines = [line for line in result_string.split('\n') if 'split_after:' in line]
+                split_after_lines = [
+                    line for line in result_string.split("\n") if "split_after:" in line
+                ]
                 if not split_after_lines:
                     # Fallback: extract all numbers from response
-                    numbers = re.findall(r'\d+', result_string)
+                    numbers = re.findall(r"\d+", result_string)
                 else:
-                    numbers = re.findall(r'\d+', split_after_lines[0])
+                    numbers = re.findall(r"\d+", split_after_lines[0])
 
                 split_indices = list(map(int, numbers))
 
                 # Validate that numbers are in ascending order
                 if split_indices != sorted(split_indices):
-                    raise ValueError(f"Split indices not in ascending order for {url}: {split_indices}")
+                    raise ValueError(
+                        f"Split indices not in ascending order for {url}: {split_indices}"
+                    )
 
             except Exception as e:
                 raise ValueError(f"Could not parse OpenAI response for {url}: {e}")
 
             # Convert chunk IDs to split indices (0-based)
-            chunks_to_split_after = [i - 1 for i in split_indices if i > 0 and i <= len(small_chunks)]
+            chunks_to_split_after = [
+                i - 1 for i in split_indices if i > 0 and i <= len(small_chunks)
+            ]
 
             # Create final chunks by combining lines based on split points
             final_chunks = []
@@ -678,33 +770,36 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
                 if i in chunks_to_split_after or i == len(small_chunks) - 1:
                     if current_chunk_lines:
                         # Join lines back with newlines
-                        chunk_content = '\n'.join(current_chunk_lines)
+                        chunk_content = "\n".join(current_chunk_lines)
 
                         # Extract anchor links from chunk content
                         content_anchors = self.extract_anchor_links(chunk_content)
 
                         # Create metadata
                         chunk_metadata = {
-                            'source_url': url,
-                            'chunk_index': len(final_chunks),
-                            'sub_chunk_index': 0,
-                            'chunking_method': 'semantic_openai',
-                            'line_range': f"{i - len(current_chunk_lines) + 1}-{i}"
+                            "source_url": url,
+                            "chunk_index": len(final_chunks),
+                            "sub_chunk_index": 0,
+                            "chunking_method": "semantic_openai",
+                            "line_range": f"{i - len(current_chunk_lines) + 1}-{i}",
                         }
 
                         # Add anchor information to metadata
                         if content_anchors:
-                            chunk_metadata['anchor_links'] = content_anchors
-                            chunk_metadata['anchor_count'] = len(content_anchors)
-                            chunk_metadata['anchor_ids'] = [a['anchor'] for a in content_anchors]
+                            chunk_metadata["anchor_links"] = content_anchors
+                            chunk_metadata["anchor_count"] = len(content_anchors)
+                            chunk_metadata["anchor_ids"] = [
+                                a["anchor"] for a in content_anchors
+                            ]
 
-                        final_chunks.append({
-                            'content': chunk_content,
-                            'metadata': chunk_metadata
-                        })
+                        final_chunks.append(
+                            {"content": chunk_content, "metadata": chunk_metadata}
+                        )
                     current_chunk_lines = []
 
-            self.logger.debug(f'Created {len(final_chunks)} semantic chunks using OpenAI from {len(small_chunks)} lines')
+            self.logger.debug(
+                f"Created {len(final_chunks)} semantic chunks using OpenAI from {len(small_chunks)} lines"
+            )
             return final_chunks
 
         except Exception as e:
@@ -724,7 +819,7 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
         # First pass: split by markdown headers
         markdown_splitter = MarkdownHeaderTextSplitter(
             headers_to_split_on=headers_to_split_on,
-            strip_headers=False  # Keep headers in the chunks
+            strip_headers=False,  # Keep headers in the chunks
         )
 
         header_splits = markdown_splitter.split_text(markdown_text)
@@ -734,19 +829,19 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
             chunk_size=2000,
             chunk_overlap=200,
             length_function=len,
-            separators=["```", "\n\n", "\n", " ", ""]
+            separators=["```", "\n\n", "\n", " ", ""],
         )
 
         for i, doc in enumerate(header_splits):
             # Get the header metadata
-            metadata = doc.metadata.copy() if hasattr(doc, 'metadata') else {}
-            metadata['source_url'] = url
-            metadata['chunk_index'] = i
-            metadata['chunking_method'] = 'header_based'
+            metadata = doc.metadata.copy() if hasattr(doc, "metadata") else {}
+            metadata["source_url"] = url
+            metadata["chunk_index"] = i
+            metadata["chunking_method"] = "header_based"
 
             # Extract anchor links from headers (breadcrumb context)
             header_anchors = []
-            for level in ['Header 1', 'Header 2', 'Header 3']:
+            for level in ["Header 1", "Header 2", "Header 3"]:
                 if level in metadata:
                     header_anchors.extend(self.extract_anchor_links(metadata[level]))
 
@@ -755,7 +850,7 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
 
             for j, chunk_text in enumerate(sub_chunks):
                 chunk_metadata = metadata.copy()
-                chunk_metadata['sub_chunk_index'] = j
+                chunk_metadata["sub_chunk_index"] = j
 
                 # Extract anchor links from chunk content
                 content_anchors = self.extract_anchor_links(chunk_text)
@@ -765,29 +860,26 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
                 unique_anchors = []
                 seen_anchors = set()
                 for anchor in all_anchors:
-                    anchor_key = (anchor['text'], anchor['anchor'])
+                    anchor_key = (anchor["text"], anchor["anchor"])
                     if anchor_key not in seen_anchors:
                         unique_anchors.append(anchor)
                         seen_anchors.add(anchor_key)
 
                 # Add anchor information to metadata
                 if unique_anchors:
-                    chunk_metadata['anchor_links'] = unique_anchors
-                    chunk_metadata['anchor_count'] = len(unique_anchors)
+                    chunk_metadata["anchor_links"] = unique_anchors
+                    chunk_metadata["anchor_count"] = len(unique_anchors)
                     # Also create a simple list of anchor IDs for easier searching
-                    chunk_metadata['anchor_ids'] = [a['anchor'] for a in unique_anchors]
+                    chunk_metadata["anchor_ids"] = [a["anchor"] for a in unique_anchors]
 
-                chunks.append({
-                    'content': chunk_text,
-                    'metadata': chunk_metadata
-                })
+                chunks.append({"content": chunk_text, "metadata": chunk_metadata})
 
-        self.logger.debug(f'Created {len(chunks)} chunks using header-based method')
+        self.logger.debug(f"Created {len(chunks)} chunks using header-based method")
         return chunks
 
     def chunk_markdown_content(self, markdown_text, url):
         """Route to appropriate chunking method based on configuration"""
-        if self.chunking_method == 'semantic':
+        if self.chunking_method == "semantic":
             return self.semantic_chunk_with_openai(markdown_text, url)
         else:  # Default to header-based
             return self.chunk_markdown_content_header_based(markdown_text, url)
@@ -796,11 +888,14 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
         """Filter sitemap entries to only include HTML pages under the url_prefix"""
         for entry in entries:
             # Only process HTML pages, skip images, PDFs, etc.
-            if any(ext in entry['loc'] for ext in ['.pdf', '.jpg', '.png', '.gif', '.css', '.js', '.xml']):
+            if any(
+                ext in entry["loc"]
+                for ext in [".pdf", ".jpg", ".png", ".gif", ".css", ".js", ".xml"]
+            ):
                 continue
             # If url_prefix is set, only include URLs that match the prefix
             if self.url_prefix:
-                parsed = urlparse(entry['loc'])
+                parsed = urlparse(entry["loc"])
                 if not parsed.path.startswith(self.url_prefix):
                     continue
             yield entry
@@ -815,19 +910,21 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
 
         # Check if we've reached the maximum number of pages
         if self.max_pages and self.pages_processed >= self.max_pages:
-            self.logger.info(f'Reached maximum pages limit ({self.max_pages}), stopping crawler')
-            self.crawler.engine.close_spider(self, 'max_pages_reached')
+            self.logger.info(
+                f"Reached maximum pages limit ({self.max_pages}), stopping crawler"
+            )
+            self.crawler.engine.close_spider(self, "max_pages_reached")
             return
 
         self.processed_urls.add(url)
         self.pages_processed += 1
 
         # Log the URL being processed
-        self.logger.info(f'Processing: {url}')
+        self.logger.info(f"Processing: {url}")
 
         try:
             # Parse HTML with BeautifulSoup
-            soup = BeautifulSoup(response.body, 'html.parser')
+            soup = BeautifulSoup(response.body, "html.parser")
 
             # Remove elements based on configured selectors
             for selector in self.ignore_selectors:
@@ -835,7 +932,9 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
                 for element in elements:
                     element.decompose()
                 if elements:
-                    self.logger.debug(f'Removed {len(elements)} elements matching: {selector}')
+                    self.logger.debug(
+                        f"Removed {len(elements)} elements matching: {selector}"
+                    )
 
             # Strip data: images if requested
             if self.should_strip_data_images:
@@ -869,24 +968,30 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
                         domain=self.domain,
                         filename=filename,
                         content_length=len(markdown_output),
-                        chunking_method=self.chunking_method
+                        chunking_method=self.chunking_method,
                     )
 
-                    self.logger.info(f'Generating embeddings for {len(chunks)} chunks from: {url}')
+                    self.logger.info(
+                        f"Generating embeddings for {len(chunks)} chunks from: {url}"
+                    )
                     self.db_manager.save_chunks(page_id, chunks)
 
-                    self.logger.info(f'Saved {len(chunks)} chunks with embeddings to database: {url}')
+                    self.logger.info(
+                        f"Saved {len(chunks)} chunks with embeddings to database: {url}"
+                    )
 
                 if self.file_manager is not None:
                     # Save to file
-                    filepath = self.file_manager.save_chunked_content(url, filename, chunks)
-                    self.logger.info(f'Saved {len(chunks)} chunks: {filepath}')
+                    filepath = self.file_manager.save_chunked_content(
+                        url, filename, chunks
+                    )
+                    self.logger.info(f"Saved {len(chunks)} chunks: {filepath}")
 
                 return {
-                    'url': url,
-                    'filename': filename,
-                    'content_length': len(markdown_output),
-                    'chunks_count': len(chunks)
+                    "url": url,
+                    "filename": filename,
+                    "content_length": len(markdown_output),
+                    "chunks_count": len(chunks),
                 }
             else:
                 if self.db_manager is not None:
@@ -896,35 +1001,39 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
                         domain=self.domain,
                         filename=filename,
                         content_length=len(markdown_output),
-                        chunking_method='none'
+                        chunking_method="none",
                     )
                     # Save entire content as single chunk
-                    single_chunk = [{
-                        'content': markdown_output,
-                        'metadata': {
-                            'source_url': url,
-                            'chunk_index': 0,
-                            'sub_chunk_index': 0,
-                            'chunking_method': 'none'
+                    single_chunk = [
+                        {
+                            "content": markdown_output,
+                            "metadata": {
+                                "source_url": url,
+                                "chunk_index": 0,
+                                "sub_chunk_index": 0,
+                                "chunking_method": "none",
+                            },
                         }
-                    }]
+                    ]
                     self.db_manager.save_chunks(page_id, single_chunk)
 
-                    self.logger.info(f'Saved to database: {url}')
+                    self.logger.info(f"Saved to database: {url}")
 
                 if self.file_manager is not None:
                     # Save to file
-                    filepath = self.file_manager.save_regular_content(url, filename, markdown_output)
-                    self.logger.info(f'Saved: {filepath}')
+                    filepath = self.file_manager.save_regular_content(
+                        url, filename, markdown_output
+                    )
+                    self.logger.info(f"Saved: {filepath}")
 
                 return {
-                    'url': url,
-                    'filename': filename,
-                    'content_length': len(markdown_output)
+                    "url": url,
+                    "filename": filename,
+                    "content_length": len(markdown_output),
                 }
 
         except Exception as e:
-            self.logger.error(f'Error processing {url}: {str(e)}')
+            self.logger.error(f"Error processing {url}: {str(e)}")
             return None
 
     def generate_filename(self, url):
@@ -933,20 +1042,20 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
         path = parsed.path
 
         # Remove leading/trailing slashes and replace path separators
-        path = path.strip('/')
+        path = path.strip("/")
         if not path:
-            path = 'index'
+            path = "index"
 
         # Replace problematic characters
-        safe_path = re.sub(r'[^\w\-_/]', '_', path)
-        safe_path = re.sub(r'_+', '_', safe_path)  # Replace multiple underscores
-        safe_path = safe_path.replace('/', '_')
+        safe_path = re.sub(r"[^\w\-_/]", "_", path)
+        safe_path = re.sub(r"_+", "_", safe_path)  # Replace multiple underscores
+        safe_path = safe_path.replace("/", "_")
 
         # Ensure filename isn't too long
         if len(safe_path) > 100:
             # Create hash of original path and truncate
             hash_suffix = hashlib.md5(path.encode()).hexdigest()[:8]
-            safe_path = safe_path[:80] + '_' + hash_suffix
+            safe_path = safe_path[:80] + "_" + hash_suffix
 
         return f"{safe_path}.md"
 
@@ -955,150 +1064,175 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
 if __name__ == "__main__":
     import argparse
     import sys
+
     from scrapy.crawler import CrawlerProcess
     from scrapy.utils.project import get_project_settings
 
     parser = argparse.ArgumentParser(
-        description='Scrape websites using sitemaps and convert to chunked markdown for RAG applications',
+        description="Scrape websites using sitemaps and convert to chunked markdown for RAG applications",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog='''Examples:
+        epilog="""Examples:
   %(prog)s www.tigerdata.com
   %(prog)s www.tigerdata.com -o tiger_docs -m 50
   %(prog)s www.tigerdata.com -o semantic_docs -m 5 --chunking semantic
   %(prog)s www.tigerdata.com --no-chunk --no-strip-images -m 100
   %(prog)s www.tigerdata.com --storage-type database --database-uri postgresql://user:pass@host:5432/dbname
   %(prog)s www.tigerdata.com --storage-type database --chunking semantic -m 10
-        '''
+        """,
     )
 
     # Optional arguments
-    parser.add_argument('--domain', '-d',
-                       help='Domain to scrape (e.g., www.tigerdata.com)')
+    parser.add_argument(
+        "--domain", "-d", help="Domain to scrape (e.g., www.tigerdata.com)"
+    )
 
-    parser.add_argument('-o', '--output-dir',
-                       default='scraped_docs',
-                       help='Output directory for scraped files (default: scraped_docs)')
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        default="scraped_docs",
+        help="Output directory for scraped files (default: scraped_docs)",
+    )
 
-    parser.add_argument('-m', '--max-pages',
-                       type=int,
-                       help='Maximum number of pages to scrape (default: unlimited)')
+    parser.add_argument(
+        "-m",
+        "--max-pages",
+        type=int,
+        help="Maximum number of pages to scrape (default: unlimited)",
+    )
 
-    parser.add_argument('--strip-images',
-                       action='store_true',
-                       default=True,
-                       help='Strip data: images from content (default: True)')
+    parser.add_argument(
+        "--strip-images",
+        action="store_true",
+        default=True,
+        help="Strip data: images from content (default: True)",
+    )
 
-    parser.add_argument('--no-strip-images',
-                       dest='strip_images',
-                       action='store_false',
-                       help='Keep data: images in content')
+    parser.add_argument(
+        "--no-strip-images",
+        dest="strip_images",
+        action="store_false",
+        help="Keep data: images in content",
+    )
 
-    parser.add_argument('--chunk',
-                       action='store_true',
-                       default=True,
-                       help='Enable content chunking (default: True)')
+    parser.add_argument(
+        "--chunk",
+        action="store_true",
+        default=True,
+        help="Enable content chunking (default: True)",
+    )
 
-    parser.add_argument('--no-chunk',
-                       dest='chunk',
-                       action='store_false',
-                       help='Disable content chunking')
+    parser.add_argument(
+        "--no-chunk",
+        dest="chunk",
+        action="store_false",
+        help="Disable content chunking",
+    )
 
-    parser.add_argument('--chunking',
-                       choices=['header', 'semantic'],
-                       default='header',
-                       help='Chunking method: header (default) or semantic (requires OPENAI_API_KEY)')
+    parser.add_argument(
+        "--chunking",
+        choices=["header", "semantic"],
+        default="header",
+        help="Chunking method: header (default) or semantic (requires OPENAI_API_KEY)",
+    )
 
     # Storage options
-    parser.add_argument('--storage-type',
-                       choices=['file', 'database'],
-                       default='database',
-                       help='Storage type: database (default) or file')
+    parser.add_argument(
+        "--storage-type",
+        choices=["file", "database"],
+        default="database",
+        help="Storage type: database (default) or file",
+    )
 
-    parser.add_argument('--database-uri',
-                       help='PostgreSQL connection URI (default: uses DB_URL from environment)')
+    parser.add_argument(
+        "--database-uri",
+        help="PostgreSQL connection URI (default: uses DB_URL from environment)",
+    )
 
-    parser.add_argument('--skip-indexes',
-                       action='store_true',
-                       help='Skip creating database indexes after import (for development/testing)')
+    parser.add_argument(
+        "--skip-indexes",
+        action="store_true",
+        help="Skip creating database indexes after import (for development/testing)",
+    )
 
-    parser.add_argument('--delay',
-                       type=float,
-                       default=1.0,
-                       help='Download delay in seconds (default: 1.0)')
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=1.0,
+        help="Download delay in seconds (default: 1.0)",
+    )
 
-    parser.add_argument('--concurrent',
-                       type=int,
-                       default=4,
-                       help='Maximum concurrent requests (default: 4)')
+    parser.add_argument(
+        "--concurrent",
+        type=int,
+        default=4,
+        help="Maximum concurrent requests (default: 4)",
+    )
 
-    parser.add_argument('--url-prefix',
-                       help='URL path prefix to filter pages (e.g., /docs to only scrape URLs under /docs)')
+    parser.add_argument(
+        "--url-prefix",
+        help="URL path prefix to filter pages (e.g., /docs to only scrape URLs under /docs)",
+    )
 
-    parser.add_argument('--log-level',
-                       choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-                       default='INFO',
-                       help='Logging level (default: INFO)')
+    parser.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
 
-    parser.add_argument('--user-agent',
-                       default='Mozilla/5.0 (compatible; DocumentationScraper)',
-                       help='User agent string')
-
-    # Build database URI from environment variables (only if all are present)
-    def build_database_uri():
-        db_url = os.environ.get('DB_URL')
-        if db_url:
-            return db_url
-        # Try to build from individual PG* environment variables
-        pg_user = os.environ.get('PGUSER')
-        pg_password = os.environ.get('PGPASSWORD')
-        pg_host = os.environ.get('PGHOST')
-        pg_port = os.environ.get('PGPORT')
-        pg_database = os.environ.get('PGDATABASE')
-        if all([pg_user, pg_password, pg_host, pg_port, pg_database]):
-            # URL-encode password to handle special characters like '@'
-            encoded_password = quote(pg_password, safe='')
-            return f'postgresql://{pg_user}:{encoded_password}@{pg_host}:{pg_port}/{pg_database}'
-        return None  # Will be validated later if database storage is selected
+    parser.add_argument(
+        "--user-agent",
+        default="Mozilla/5.0 (compatible; DocumentationScraper)",
+        help="User agent string",
+    )
 
     # Set defaults from environment variables
     parser.set_defaults(
         database_uri=build_database_uri(),
-        domain=os.environ.get('SCRAPER_DOMAIN', 'www.tigerdata.com'),
-        max_pages=int(os.environ.get('SCRAPER_MAX_PAGES', 0)) or None,
-        output_dir=os.environ.get('SCRAPER_OUTPUT_DIR', os.path.join(script_dir, 'build', 'scraped_docs')),
-        chunking=os.environ.get('SCRAPER_CHUNKING_METHOD', 'header'),
-        storage_type=os.environ.get('SCRAPER_STORAGE_TYPE', 'database'),
-        url_prefix=os.environ.get('SCRAPER_URL_PREFIX', '/docs')
+        domain=os.environ.get("SCRAPER_DOMAIN", "www.tigerdata.com"),
+        max_pages=int(os.environ.get("SCRAPER_MAX_PAGES", 0)) or None,
+        output_dir=os.environ.get(
+            "SCRAPER_OUTPUT_DIR", os.path.join(script_dir, "build", "scraped_docs")
+        ),
+        chunking=os.environ.get("SCRAPER_CHUNKING_METHOD", "header"),
+        storage_type=os.environ.get("SCRAPER_STORAGE_TYPE", "database"),
+        url_prefix=os.environ.get("SCRAPER_URL_PREFIX", "/docs"),
     )
 
     args = parser.parse_args()
 
     # Validate database storage requirements
-    if args.storage_type == 'database' and not args.database_uri:
+    if args.storage_type == "database" and not args.database_uri:
         print("Error: Database storage requires database connection configuration")
-        print("Set environment variables: DB_URL or (PGUSER, PGPASSWORD, PGHOST, PGPORT, PGDATABASE)")
+        print(
+            "Set environment variables: DB_URL or (PGUSER, PGPASSWORD, PGHOST, PGPORT, PGDATABASE)"
+        )
         print("Or use --storage-type file for file-based storage")
         sys.exit(1)
 
     # Validate semantic chunking requirements
-    if args.chunking == 'semantic':
-        if not os.getenv('OPENAI_API_KEY'):
-            print("Error: Semantic chunking requires OPENAI_API_KEY environment variable")
+    if args.chunking == "semantic":
+        if not os.getenv("OPENAI_API_KEY"):
+            print(
+                "Error: Semantic chunking requires OPENAI_API_KEY environment variable"
+            )
             print("Set it with: export OPENAI_API_KEY=your_api_key")
             print("Or create a .env file with: OPENAI_API_KEY=your_api_key")
             sys.exit(1)
 
     # Configure Scrapy settings
     settings = get_project_settings()
-    settings.update({
-        'USER_AGENT': args.user_agent,
-        'ROBOTSTXT_OBEY': True,
-        'DOWNLOAD_DELAY': args.delay,
-        'RANDOMIZE_DOWNLOAD_DELAY': True,
-        'CONCURRENT_REQUESTS': args.concurrent,
-        'CONCURRENT_REQUESTS_PER_DOMAIN': min(args.concurrent, 2),
-        'LOG_LEVEL': args.log_level,
-    })
+    settings.update(
+        {
+            "USER_AGENT": args.user_agent,
+            "ROBOTSTXT_OBEY": True,
+            "DOWNLOAD_DELAY": args.delay,
+            "RANDOMIZE_DOWNLOAD_DELAY": True,
+            "CONCURRENT_REQUESTS": args.concurrent,
+            "CONCURRENT_REQUESTS_PER_DOMAIN": min(args.concurrent, 2),
+            "LOG_LEVEL": args.log_level,
+        }
+    )
 
     print(f"Starting scraper for {args.domain}")
     print(f"URL prefix: {args.url_prefix or 'none (all pages)'}")
@@ -1107,7 +1241,7 @@ if __name__ == "__main__":
     print(f"Chunking: {'enabled' if args.chunk else 'disabled'} ({args.chunking})")
     print(f"Strip images: {args.strip_images}")
     print(f"Storage type: {args.storage_type}")
-    if args.storage_type == 'database':
+    if args.storage_type == "database":
         print(f"Database URI: {args.database_uri}")
     print()
 
@@ -1115,7 +1249,7 @@ if __name__ == "__main__":
     db_manager = None
     file_manager = None
 
-    if args.storage_type == 'database':
+    if args.storage_type == "database":
         # Initialize embedding model for database storage (needed for both header and semantic)
         # Initialize client with optional custom base URL
         client_kwargs = {"api_key": OPENAI_API_KEY}
@@ -1123,7 +1257,9 @@ if __name__ == "__main__":
             client_kwargs["base_url"] = OPENAI_BASE_URL
             print(f"Using custom OpenAI base URL: {OPENAI_BASE_URL}")
         client = openai.OpenAI(**client_kwargs)
-        print(f"Using embedding model: {EMBEDDING_MODEL} (dimensions: {EMBEDDING_DIMENSIONS})")
+        print(
+            f"Using embedding model: {EMBEDDING_MODEL} (dimensions: {EMBEDDING_DIMENSIONS})"
+        )
 
         # Create embedding wrapper
         class OpenAIEmbeddingWrapper:
@@ -1134,14 +1270,16 @@ if __name__ == "__main__":
 
             def get_text_embeddings(self, texts):
                 response = self.client.embeddings.create(
-                    input=texts,
-                    model=self.model,
-                    dimensions=self.dimensions
+                    input=texts, model=self.model, dimensions=self.dimensions
                 )
                 return [embedding.embedding for embedding in response.data]
 
-        embedding_model = OpenAIEmbeddingWrapper(client, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS)
-        db_manager = DatabaseManager(database_uri=args.database_uri, embedding_model=embedding_model)
+        embedding_model = OpenAIEmbeddingWrapper(
+            client, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS
+        )
+        db_manager = DatabaseManager(
+            database_uri=args.database_uri, embedding_model=embedding_model
+        )
         db_manager.initialize()
     else:
         file_manager = FileManager(args.output_dir)
@@ -1157,20 +1295,24 @@ if __name__ == "__main__":
         chunking_method=args.chunking,
         db_manager=db_manager,
         file_manager=file_manager,
-        url_prefix=args.url_prefix
+        url_prefix=args.url_prefix,
     )
     process.start()
 
     # Create database indexes after scraping completes
-    if args.storage_type == 'database' and db_manager:
+    if args.storage_type == "database" and db_manager:
         try:
             # Check if any pages were scraped
             page_count = db_manager.get_scraped_page_count()
             print(f"Scraped {page_count} pages.")
 
             if page_count == 0:
-                print("Error: No pages were scraped. Aborting to preserve existing data.")
-                print("Check that the sitemap is accessible and the URL prefix is correct.")
+                print(
+                    "Error: No pages were scraped. Aborting to preserve existing data."
+                )
+                print(
+                    "Check that the sitemap is accessible and the URL prefix is correct."
+                )
                 raise SystemExit(1)
 
             if args.skip_indexes:

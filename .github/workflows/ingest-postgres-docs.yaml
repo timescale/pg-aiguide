@@ -45,6 +45,8 @@ jobs:
 
       - name: Ingest PostgreSQL ${{ github.event.inputs.version }} docs for dev
         run: uv run python postgres_docs.py ${{ github.event.inputs.version }}
+        env:
+          PYTHONPATH: ..
 
   ingest-prod:
     name: Ingest PostgreSQL docs for Prod
