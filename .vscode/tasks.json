@@ -42,7 +42,10 @@
     {
       "label": "pg-aiguide MCP - Build Only",
       "dependsOrder": "sequence",
-      "dependsOn": ["pg-aiguide MCP - bun: install", "pg-aiguide MCP - bun: build"],
+      "dependsOn": [
+        "pg-aiguide MCP - bun: install",
+        "pg-aiguide MCP - bun: build"
+      ],
       "group": {
         "kind": "build",
         "isDefault": true

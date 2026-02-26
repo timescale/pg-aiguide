@@ -6,12 +6,7 @@
       "type": "debugpy",
       "request": "launch",
       "module": "ingest.postgis_docs",
-      "args": [
-        "--version",
-        "3.5",
-        "--storage-type",
-        "file"
-      ],
+      "args": ["--version", "3.5", "--storage-type", "file"],
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/ingest/.venv/bin/python",
       "envFile": "${workspaceFolder}/.env",
@@ -22,12 +17,7 @@
       "type": "debugpy",
       "request": "launch",
       "module": "ingest.postgis_docs",
-      "args": [
-        "--version",
-        "3.5",
-        "--storage-type",
-        "database"
-      ],
+      "args": ["--version", "3.5", "--storage-type", "database"],
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/ingest/.venv/bin/python",
       "envFile": "${workspaceFolder}/.env",
@@ -38,9 +28,7 @@
       "type": "debugpy",
       "request": "launch",
       "module": "ingest.postgres_docs",
-      "args": [
-        "17"
-      ],
+      "args": ["17"],
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/ingest/.venv/bin/python",
       "envFile": "${workspaceFolder}/.env",
@@ -51,10 +39,7 @@
       "type": "debugpy",
       "request": "launch",
       "module": "ingest.tiger_docs",
-      "args": [
-        "--storage-type",
-        "file"
-      ],
+      "args": ["--storage-type", "file"],
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/ingest/.venv/bin/python",
       "envFile": "${workspaceFolder}/.env",
@@ -65,10 +50,7 @@
       "type": "debugpy",
       "request": "launch",
       "module": "ingest.tiger_docs",
-      "args": [
-        "--storage-type",
-        "database"
-      ],
+      "args": ["--storage-type", "database"],
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/ingest/.venv/bin/python",
       "envFile": "${workspaceFolder}/.env",
@@ -89,7 +71,10 @@
       "envFile": "${workspaceFolder}/.env",
       "sourceMaps": true,
       "outFiles": ["${workspaceFolder}/dist/**/*.js", "!**/node_modules/**"],
-      "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
       "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
     },
     {
@@ -107,7 +92,10 @@
       "envFile": "${workspaceFolder}/.env",
       "sourceMaps": true,
       "outFiles": ["${workspaceFolder}/dist/**/*.js", "!**/node_modules/**"],
-      "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
       "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
     }
   ]
