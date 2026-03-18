@@ -15,7 +15,7 @@
       "name": "pg",
       "source": "./",
       "description": "Comprehensive PostgreSQL documentation and best practices through semantic search and curated skills, including ecosystem tools like TimescaleDB and Tiger Cloud",
-      "version": "0.3.1",
+      "version": "0.4.0",
       "author": {
         "name": "TigerData",
         "url": "https://tigerdata.com"
