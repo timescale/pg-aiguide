@@ -136,8 +136,6 @@ export const searchDocsFactory: ApiFactory<
         )
       : query;
 
-    const isTiger = source === 'tiger';
-
     const sql = /* sql */ `
         SELECT
           c.id::int,
@@ -146,16 +144,16 @@ export const searchDocsFactory: ApiFactory<
           ${isSemantic ? `c.embedding <=> $1::vector(1536) AS distance` : `  -(c.content <@> to_bm25query($1, '${schema}.${entityPrefix}_chunks_content_idx')) as score`}
         FROM ${schema}.${entityPrefix}_chunks c
         ${
-          !isTiger
+          version
             ? `JOIN ${schema}.${entityPrefix}_pages p ON c.page_id = p.id
         WHERE p.version = $2`
             : ``
         }
         ORDER BY ${isSemantic ? 'distance' : `c.content <@> to_bm25query($1, '${schema}.${entityPrefix}_chunks_content_idx')`}
-        LIMIT $${isTiger ? '2' : '3'}
+        LIMIT $${version ? '3' : '2'}
         `;
 
-    const params = [searchParam, ...(!isTiger ? [version] : []), limit];
+    const params = [searchParam, ...(version ? [version] : []), limit];
 
     if (isSemantic) {
       const result = await pgPool.query<SemanticResult>(sql, params);
