@@ -89,6 +89,11 @@ export const searchDocsFactory: ApiFactory<
       'Search documentation using semantic or keyword search. Supports Tiger Cloud (TimescaleDB), PostgreSQL, and PostGIS.',
     inputSchema,
     outputSchema,
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
   },
   fn: async ({
     source,
