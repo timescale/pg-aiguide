@@ -89,6 +89,10 @@ export const searchDocsFactory: ApiFactory<
       'Search documentation using semantic or keyword search. Supports Tiger Cloud (TimescaleDB), PostgreSQL, and PostGIS.',
     inputSchema,
     outputSchema,
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+    },
   },
   fn: async ({
     source,
@@ -97,7 +101,10 @@ export const searchDocsFactory: ApiFactory<
     version: passedVersion,
     limit: passedLimit,
   }): Promise<OutputSchema> => {
-    const limit = passedLimit > 0 ? passedLimit : 10;
+    const limit = passedLimit != null ? passedLimit : 10;
+    if (limit <= 0) {
+      throw new Error('Limit must be a positive integer.');
+    }
 
     if (!query.trim()) {
       throw new Error('Query must be a non-empty string.');
