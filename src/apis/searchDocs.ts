@@ -8,7 +8,6 @@ type SourceType = 'tiger' | 'postgres' | 'postgis';
 const ENTITY_NAME_MAPPINGS: Partial<Record<SourceType, string>> = {
   tiger: 'timescale',
 };
-const SEARCH_TYPES = ['semantic', 'keyword'];
 
 const inputSchema = {
   source: z
@@ -28,7 +27,7 @@ const inputSchema = {
       'The documentation source to search. "tiger" for Tiger Cloud and TimescaleDB, "postgres" for PostgreSQL, "postgis" for PostGIS spatial extension. Specific versions provided with _X.X suffixes.',
     ),
   search_type: z
-    .enum(SEARCH_TYPES)
+    .enum(['semantic', 'keyword'])
     .describe(
       'The type of search to perform. "semantic" uses natural language vector similarity, "keyword" uses BM25 keyword matching.',
     ),
