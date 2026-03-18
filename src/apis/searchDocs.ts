@@ -6,7 +6,18 @@ import type { ServerContext } from '../types.js';
 
 const inputSchema = {
   source: z
-    .enum(['tiger', "postgres_14", "postgres_15", "postgres_16", "postgres_17", "postgres_18", 'postgis_3.3', 'postgis_3.4','postgis_3.5', 'postgis_3.6'])
+    .enum([
+      'tiger',
+      'postgres_14',
+      'postgres_15',
+      'postgres_16',
+      'postgres_17',
+      'postgres_18',
+      'postgis_3.3',
+      'postgis_3.4',
+      'postgis_3.5',
+      'postgis_3.6',
+    ])
     .describe(
       'The documentation source to search. "tiger" for Tiger Cloud and TimescaleDB, "postgres" for PostgreSQL, "postgis" for PostGIS spatial extension. Specific versions provided with _X.X suffixes.',
     ),
@@ -23,7 +34,10 @@ const inputSchema = {
   limit: z.coerce
     .number()
     .int()
-    .describe('The maximum number of matches to return. Default is 10.'),
+    .nullable()
+    .describe(
+      'The maximum number of matches to return. If not provided, default is 10.',
+    ),
 } as const;
 
 const zBaseResult = z.object({
@@ -98,119 +112,58 @@ export const searchDocsFactory: ApiFactory<
     if (!query.trim()) {
       throw new Error('Query must be a non-empty string.');
     }
-    const [source, version] = passedSource.split("_");
-
+    const [source, version] = passedSource.split('_');
+    const entityPrefix = source === 'tiger' ? 'timescale' : source;
+    const isTiger = source === 'tiger';
     if (search_type === 'semantic') {
       const { embedding } = await embed({
         model: openai.embedding('text-embedding-3-small'),
         value: query,
       });
 
-      if (source === 'tiger') {
-        const result = await pgPool.query<SemanticResult>(
-          /* sql */ `
-SELECT
-  id::int,
-  content,
-  metadata::text,
-  embedding <=> $1::vector(1536) AS distance
- FROM ${schema}.timescale_chunks
- ORDER BY distance
- LIMIT $2
-`,
-          [JSON.stringify(embedding), limit],
-        );
-        return { results: result.rows };
-      } else if (source === 'postgres') {
-        // postgres
-        const result = await pgPool.query<SemanticResult>(
-          /* sql */ `
-SELECT
-  c.id::int,
-  c.content,
-  c.metadata::text,
-  c.embedding <=> $1::vector(1536) AS distance
- FROM ${schema}.postgres_chunks c
- JOIN ${schema}.postgres_pages p ON c.page_id = p.id
- WHERE p.version = $2
- ORDER BY distance
- LIMIT $3
-`,
-          [JSON.stringify(embedding), version, limit],
-        );
-        return { results: result.rows };
-      } else if (source === 'postgis') {
-        const result = await pgPool.query<SemanticResult>(
-          /* sql */ `
-SELECT
-  id::int,
-  content,
-  metadata::text,
-  embedding <=> $1::vector(1536) AS distance
- FROM ${schema}.postgis_chunks
- ORDER BY distance
- LIMIT $2
-`,
-          [JSON.stringify(embedding), limit],
-        );
-        return { results: result.rows };
-      } else {
-        // @ts-expect-error exhaustive cases
-        throw new Error(`Unsupported source: ${source.toString()}`);
-      }
+      const result = await pgPool.query<SemanticResult>(
+        /* sql */ `
+        SELECT
+          c.id::int,
+          c.content,
+          c.metadata::text,
+          c.embedding <=> $1::vector(1536) AS distance
+        FROM ${schema}.${entityPrefix}_chunks c
+        ${
+          !isTiger
+            ? `JOIN ${schema}.${entityPrefix}_pages p ON c.page_id = p.id
+        WHERE p.version = $2`
+            : ``
+        }
+        ORDER BY distance
+        LIMIT $${isTiger ? '2' : '3'}
+        `,
+        [JSON.stringify(embedding), ...(!isTiger ? [version] : []), limit],
+      );
+      return { results: result.rows };
     } else if (search_type === 'keyword') {
-      if (source === 'tiger') {
-        const result = await pgPool.query<KeywordResult>(
-          /* sql */ `
-SELECT
-  id::int,
-  content,
-  metadata::text,
-  -(content <@> to_bm25query($1, '${schema}.timescale_chunks_content_idx')) as score
- FROM ${schema}.timescale_chunks
- ORDER BY content <@> to_bm25query($1, '${schema}.timescale_chunks_content_idx')
- LIMIT $2
-`,
-          [query, limit],
-        );
-        return { results: result.rows };
-      } else if (source === 'postgres') {
-        const result = await pgPool.query<KeywordResult>(
-          /* sql */ `
-SELECT
-  c.id::int,
-  c.content,
-  c.metadata::text,
-  -(c.content <@> to_bm25query($1, '${schema}.postgres_chunks_content_idx')) as score
- FROM ${schema}.postgres_chunks c
- JOIN ${schema}.postgres_pages p ON c.page_id = p.id
- WHERE p.version = $2
- ORDER BY c.content <@> to_bm25query($1, '${schema}.postgres_chunks_content_idx')
- LIMIT $3
-`,
-          [query, version, limit],
-        );
+      const result = await pgPool.query<KeywordResult>(
+        /* sql */ `
+          SELECT
+            c.id::int,
+            c.content,
+            c.metadata::text,
+            -(c.content <@> to_bm25query($1, '${schema}.${entityPrefix}_chunks_content_idx')) as score
+          FROM ${schema}.${entityPrefix}_chunks c
+          ${
+            !isTiger
+              ? `JOIN ${schema}.${entityPrefix}_pages p ON c.page_id = p.id
+          WHERE p.version = $2`
+              : ''
+          }
+          
+          ORDER BY c.content <@> to_bm25query($1, '${schema}.${entityPrefix}_chunks_content_idx')
+          LIMIT $${isTiger ? '2' : '3'}
+          `,
+        [query, ...(!isTiger ? [version] : []), limit],
+      );
 
-        return { results: result.rows };
-      } else if (source === 'postgis') {
-        const result = await pgPool.query<KeywordResult>(
-          /* sql */ `
-SELECT
-  id::int,
-  content,
-  metadata::text,
-  -(content <@> to_bm25query($1, '${schema}.postgis_chunks_content_idx')) as score
- FROM ${schema}.postgis_chunks
- ORDER BY content <@> to_bm25query($1, '${schema}.postgis_chunks_content_idx')
- LIMIT $2
-`,
-          [query, limit],
-        );
-        return { results: result.rows };
-      } else {
-        // @ts-expect-error exhaustive cases
-        throw new Error(`Unsupported source: ${source.toString()}`);
-      }
+      return { results: result.rows };
     } else {
       // @ts-expect-error exhaustive cases
       throw new Error(`Unsupported search_type: ${search_type.toString()}`);
