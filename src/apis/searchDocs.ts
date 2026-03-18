@@ -92,7 +92,6 @@ export const searchDocsFactory: ApiFactory<
     annotations: {
       readOnlyHint: true,
       idempotentHint: true,
-      openWorldHint: true,
     },
   },
   fn: async ({

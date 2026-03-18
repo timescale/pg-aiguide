@@ -6,7 +6,7 @@
       "name": "@tigerdata/pg-aiguide",
       "dependencies": {
         "@ai-sdk/openai": "^3.0.41",
-        "@tigerdata/mcp-boilerplate": "^1.3.0",
+        "@tigerdata/mcp-boilerplate": "^1.3.1",
         "ai": "^6.0.116",
         "dotenv": "^17.3.1",
         "gray-matter": "^4.0.3",
@@ -615,7 +615,7 @@
 
     "@tailwindcss/vite": ["@tailwindcss/vite@4.2.1", "", { "dependencies": { "@tailwindcss/node": "4.2.1", "@tailwindcss/oxide": "4.2.1", "tailwindcss": "4.2.1" }, "peerDependencies": { "vite": "^5.2.0 || ^6 || ^7" } }, "sha512-TBf2sJjYeb28jD2U/OhwdW0bbOsxkWPwQ7SrqGf9sVcoYwZj7rkXljroBO9wKBut9XnmQLXanuDUeqQK0lGg/w=="],
 
-    "@tigerdata/mcp-boilerplate": ["@tigerdata/mcp-boilerplate@1.3.0", "", { "dependencies": { "@mcp-use/inspector": "^0.24.5", "@modelcontextprotocol/sdk": "^1.27.1", "@opentelemetry/api": "^1.9.0", "@opentelemetry/auto-instrumentations-node": "^0.71.0", "@opentelemetry/exporter-trace-otlp-grpc": "^0.213.0", "@opentelemetry/instrumentation-http": "^0.213.0", "@opentelemetry/sdk-metrics": "^2.6.0", "@opentelemetry/sdk-node": "^0.213.0", "@opentelemetry/sdk-trace-node": "^2.6.0", "@opentelemetry/semantic-conventions": "^1.40.0", "@toon-format/toon": "^2.1.0", "express": "^5.2.1", "gray-matter": "^4.0.3", "raw-body": "^3.0.2", "yaml": "^2.8.2" }, "peerDependencies": { "zod": "^3.25 || ^4.0" } }, "sha512-enxA5Z2XZcxhqnJvro+TWUo+5TKykw2lXumPA081lmDHdcujMsGOb5WKojfbenFSr83D9JaA22xKrLQ0+bILNw=="],
+    "@tigerdata/mcp-boilerplate": ["@tigerdata/mcp-boilerplate@1.3.1", "", { "dependencies": { "@mcp-use/inspector": "^0.24.5", "@modelcontextprotocol/sdk": "^1.27.1", "@opentelemetry/api": "^1.9.0", "@opentelemetry/auto-instrumentations-node": "^0.71.0", "@opentelemetry/exporter-trace-otlp-grpc": "^0.213.0", "@opentelemetry/instrumentation-http": "^0.213.0", "@opentelemetry/sdk-metrics": "^2.6.0", "@opentelemetry/sdk-node": "^0.213.0", "@opentelemetry/sdk-trace-node": "^2.6.0", "@opentelemetry/semantic-conventions": "^1.40.0", "@toon-format/toon": "^2.1.0", "express": "^5.2.1", "gray-matter": "^4.0.3", "raw-body": "^3.0.2", "yaml": "^2.8.2" }, "peerDependencies": { "zod": "^3.25 || ^4.0" } }, "sha512-T9FeZRfcpD/0E1ENI8LeiLve4AAfYxD5TdQU9xTR31I86mNk2eUagy01SXaz7UNl0GOC0sHN3Ipq477AKgP3Ug=="],
 
     "@toon-format/toon": ["@toon-format/toon@2.1.0", "", {}, "sha512-JwWptdF5eOA0HaQxbKAzkpQtR4wSWTEfDlEy/y3/4okmOAX1qwnpLZMmtEWr+ncAhTTY1raCKH0kteHhSXnQqg=="],
 
