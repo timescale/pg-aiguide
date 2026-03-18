@@ -154,14 +154,11 @@ export const searchDocsFactory: ApiFactory<
         `;
 
     const params = [searchParam, ...(version ? [version] : []), limit];
-
-    if (isSemantic) {
-      const result = await pgPool.query<SemanticResult>(sql, params);
-      return { results: result.rows };
-    } else {
-      const result = await pgPool.query<KeywordResult>(sql, params);
-      return { results: result.rows };
-    }
+    const result = await pgPool.query<SemanticResult | KeywordResult>(
+      sql,
+      params,
+    );
+    return { results: result.rows };
   },
   pickResult: (r) => r.results,
 });
