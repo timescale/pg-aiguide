@@ -43,13 +43,18 @@ function validateVersion(version: string): void {
   }
 }
 
-const nextVersion = process.argv[2];
+const INCREMENT_TYPES = ['major', 'minor', 'patch'] as const;
+type IncrementType = (typeof INCREMENT_TYPES)[number];
 
-if (!nextVersion) {
-  fail('Usage: ./bun release <version>');
+function isIncrementType(value: string): value is IncrementType {
+  return (INCREMENT_TYPES as ReadonlyArray<string>).includes(value);
 }
 
-validateVersion(nextVersion);
+const versionArg = process.argv[2];
+
+if (!versionArg) {
+  fail('Usage: ./bun release <version | major | minor | patch>');
+}
 
 const releaseStatus = await run(['git', 'status', '--porcelain']);
 if (releaseStatus.stdout.trim().length > 0) {
@@ -72,6 +77,16 @@ if (!currentVersion || !semver.valid(currentVersion)) {
   );
 }
 
+const nextVersion = isIncrementType(versionArg)
+  ? semver.inc(currentVersion, versionArg)
+  : versionArg;
+
+if (!nextVersion) {
+  fail(`Failed to compute next version from '${versionArg}'.`);
+}
+
+validateVersion(nextVersion);
+
 if (!semver.gt(nextVersion, currentVersion)) {
   fail(
     `Version ${nextVersion} is not greater than current version ${currentVersion}.`,
@@ -84,7 +99,27 @@ if (tagCheck.stdout.trim() === tagName) {
   fail(`Tag ${tagName} already exists.`);
 }
 
-await run(['git', 'switch', 'main']);
+const branchResult = await run(['git', 'rev-parse', '--abbrev-ref', 'HEAD']);
+const currentBranch = branchResult.stdout.trim();
+if (currentBranch !== 'main') {
+  fail(
+    `Must be on the 'main' branch to release. Currently on '${currentBranch}'.`,
+  );
+}
+
+await run(['git', 'fetch', 'origin', 'main']);
+const behindResult = await run([
+  'git',
+  'rev-list',
+  '--count',
+  'main..origin/main',
+]);
+const behindCount = Number.parseInt(behindResult.stdout.trim(), 10);
+if (behindCount > 0) {
+  fail(
+    `Local 'main' is ${behindCount} commit(s) behind 'origin/main'. Pull before releasing.`,
+  );
+}
 
 packageJson.version = nextVersion;
 await Bun.write(packageFile, `${JSON.stringify(packageJson, null, 2)}\n`);
