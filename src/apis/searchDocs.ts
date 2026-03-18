@@ -114,20 +114,26 @@ export const searchDocsFactory: ApiFactory<
     }
     const [source, version] = passedSource.split('_');
     const entityPrefix = source === 'tiger' ? 'timescale' : source;
-    const isTiger = source === 'tiger';
-    if (search_type === 'semantic') {
-      const { embedding } = await embed({
-        model: openai.embedding('text-embedding-3-small'),
-        value: query,
-      });
 
-      const result = await pgPool.query<SemanticResult>(
-        /* sql */ `
+    const isSemantic = search_type === 'semantic';
+    const searchParam = isSemantic
+      ? query
+      : JSON.stringify(
+          (
+            await embed({
+              model: openai.embedding('text-embedding-3-small'),
+              value: query,
+            })
+          ).embedding,
+        );
+    const isTiger = source === 'tiger';
+
+    const sql = /* sql */ `
         SELECT
           c.id::int,
           c.content,
           c.metadata::text,
-          c.embedding <=> $1::vector(1536) AS distance
+          ${isSemantic ? `c.embedding <=> $1::vector(1536) AS distance` : `  -(c.content <@> to_bm25query($1, '${schema}.${entityPrefix}_chunks_content_idx')) as score`}
         FROM ${schema}.${entityPrefix}_chunks c
         ${
           !isTiger
@@ -135,38 +141,18 @@ export const searchDocsFactory: ApiFactory<
         WHERE p.version = $2`
             : ``
         }
-        ORDER BY distance
+        ORDER BY ${isSemantic ? 'distance' : `c.content <@> to_bm25query($1, '${schema}.${entityPrefix}_chunks_content_idx')`}
         LIMIT $${isTiger ? '2' : '3'}
-        `,
-        [JSON.stringify(embedding), ...(!isTiger ? [version] : []), limit],
-      );
-      return { results: result.rows };
-    } else if (search_type === 'keyword') {
-      const result = await pgPool.query<KeywordResult>(
-        /* sql */ `
-          SELECT
-            c.id::int,
-            c.content,
-            c.metadata::text,
-            -(c.content <@> to_bm25query($1, '${schema}.${entityPrefix}_chunks_content_idx')) as score
-          FROM ${schema}.${entityPrefix}_chunks c
-          ${
-            !isTiger
-              ? `JOIN ${schema}.${entityPrefix}_pages p ON c.page_id = p.id
-          WHERE p.version = $2`
-              : ''
-          }
-          
-          ORDER BY c.content <@> to_bm25query($1, '${schema}.${entityPrefix}_chunks_content_idx')
-          LIMIT $${isTiger ? '2' : '3'}
-          `,
-        [query, ...(!isTiger ? [version] : []), limit],
-      );
+        `;
 
+    const params = [searchParam, ...(!isTiger ? [version] : []), limit];
+
+    if (isSemantic) {
+      const result = await pgPool.query<SemanticResult>(sql, params);
       return { results: result.rows };
     } else {
-      // @ts-expect-error exhaustive cases
-      throw new Error(`Unsupported search_type: ${search_type.toString()}`);
+      const result = await pgPool.query<KeywordResult>(sql, params);
+      return { results: result.rows };
     }
   },
   pickResult: (r) => r.results,
