@@ -117,15 +117,15 @@ export const searchDocsFactory: ApiFactory<
 
     const isSemantic = search_type === 'semantic';
     const searchParam = isSemantic
-      ? query
-      : JSON.stringify(
+      ? JSON.stringify(
           (
             await embed({
               model: openai.embedding('text-embedding-3-small'),
               value: query,
             })
           ).embedding,
-        );
+        )
+      : query;
     const isTiger = source === 'tiger';
 
     const sql = /* sql */ `
