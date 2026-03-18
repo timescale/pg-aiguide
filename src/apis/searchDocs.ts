@@ -4,7 +4,10 @@ import { embed } from 'ai';
 import { z } from 'zod';
 import type { ServerContext } from '../types.js';
 
-const ENTITY_NAME_MAPPINGS: Record<string, string> = { tiger: 'timescale' };
+type SourceType = 'tiger' | 'postgres' | 'postgis';
+const ENTITY_NAME_MAPPINGS: Partial<Record<SourceType, string>> = {
+  tiger: 'timescale',
+};
 const SEARCH_TYPES = ['semantic', 'keyword'];
 
 const inputSchema = {
@@ -117,12 +120,9 @@ export const searchDocsFactory: ApiFactory<
     }
     const [source, version] = passedSource.split('_');
 
-    if (!source || !SEARCH_TYPES.includes(search_type))
-      throw new Error('Invalid source');
+    if (!source) throw new Error('Invalid source');
 
-    const entityPrefix = Object.keys(ENTITY_NAME_MAPPINGS).includes(source)
-      ? ENTITY_NAME_MAPPINGS[source]
-      : source;
+    const entityPrefix = ENTITY_NAME_MAPPINGS[source as SourceType] ?? source;
 
     const isSemantic = search_type === 'semantic';
     const searchParam = isSemantic
