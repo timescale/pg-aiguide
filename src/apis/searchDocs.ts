@@ -4,6 +4,8 @@ import { embed } from 'ai';
 import { z } from 'zod';
 import type { ServerContext } from '../types.js';
 
+const ENTITY_NAME_MAPPINGS: Record<string, string> = { tiger: 'timescale' };
+
 const inputSchema = {
   source: z
     .enum([
@@ -113,7 +115,12 @@ export const searchDocsFactory: ApiFactory<
       throw new Error('Query must be a non-empty string.');
     }
     const [source, version] = passedSource.split('_');
-    const entityPrefix = source === 'tiger' ? 'timescale' : source;
+
+    if (!source) throw new Error('Invalid source');
+
+    const entityPrefix = Object.keys(ENTITY_NAME_MAPPINGS).includes(source)
+      ? ENTITY_NAME_MAPPINGS[source]
+      : source;
 
     const isSemantic = search_type === 'semantic';
     const searchParam = isSemantic
