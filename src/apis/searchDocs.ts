@@ -4,15 +4,11 @@ import { embed } from 'ai';
 import { z } from 'zod';
 import type { ServerContext } from '../types.js';
 
-const pg_versions = ['14', '15', '16', '17', '18'] as const;
-const latest_pg_version = pg_versions.at(-1) as (typeof pg_versions)[number];
-const versions = [...pg_versions, 'latest'] as const;
-
 const inputSchema = {
   source: z
-    .enum(['tiger', 'postgres', 'postgis'])
+    .enum(['tiger', "postgres_14", "postgres_15", "postgres_16", "postgres_17", "postgres_18", 'postgis_3.3', 'postgis_3.4','postgis_3.5', 'postgis_3.6'])
     .describe(
-      'The documentation source to search. "tiger" for Tiger Cloud and TimescaleDB, "postgres" for PostgreSQL, "postgis" for PostGIS spatial extension.',
+      'The documentation source to search. "tiger" for Tiger Cloud and TimescaleDB, "postgres" for PostgreSQL, "postgis" for PostGIS spatial extension. Specific versions provided with _X.X suffixes.',
     ),
   search_type: z
     .enum(['semantic', 'keyword'])
@@ -23,12 +19,6 @@ const inputSchema = {
     .string()
     .describe(
       'The search query. For semantic search, use natural language. For keyword search, provide keywords.',
-    ),
-  version: z
-    .enum(versions)
-    .nullable()
-    .describe(
-      'The PostgreSQL major version (ignored when searching "tiger"). Recommended to assume the latest version if unknown. Only applicable when source is Postgres. Defaults to latest version.',
     ),
   limit: z.coerce
     .number()
@@ -95,10 +85,9 @@ export const searchDocsFactory: ApiFactory<
     },
   },
   fn: async ({
-    source,
+    source: passedSource,
     search_type,
     query,
-    version: passedVersion,
     limit: passedLimit,
   }): Promise<OutputSchema> => {
     const limit = passedLimit != null ? passedLimit : 10;
@@ -109,9 +98,7 @@ export const searchDocsFactory: ApiFactory<
     if (!query.trim()) {
       throw new Error('Query must be a non-empty string.');
     }
-
-    const version =
-      passedVersion === 'latest' ? latest_pg_version : passedVersion;
+    const [source, version] = passedSource.split("_");
 
     if (search_type === 'semantic') {
       const { embedding } = await embed({
