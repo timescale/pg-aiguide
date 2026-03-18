@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { ServerContext } from '../types.js';
 
 const ENTITY_NAME_MAPPINGS: Record<string, string> = { tiger: 'timescale' };
+const SEARCH_TYPES = ['semantic', 'keyword'];
 
 const inputSchema = {
   source: z
@@ -24,7 +25,7 @@ const inputSchema = {
       'The documentation source to search. "tiger" for Tiger Cloud and TimescaleDB, "postgres" for PostgreSQL, "postgis" for PostGIS spatial extension. Specific versions provided with _X.X suffixes.',
     ),
   search_type: z
-    .enum(['semantic', 'keyword'])
+    .enum(SEARCH_TYPES)
     .describe(
       'The type of search to perform. "semantic" uses natural language vector similarity, "keyword" uses BM25 keyword matching.',
     ),
@@ -116,7 +117,8 @@ export const searchDocsFactory: ApiFactory<
     }
     const [source, version] = passedSource.split('_');
 
-    if (!source) throw new Error('Invalid source');
+    if (!source || !SEARCH_TYPES.includes(search_type))
+      throw new Error('Invalid source');
 
     const entityPrefix = Object.keys(ENTITY_NAME_MAPPINGS).includes(source)
       ? ENTITY_NAME_MAPPINGS[source]
@@ -133,6 +135,7 @@ export const searchDocsFactory: ApiFactory<
           ).embedding,
         )
       : query;
+
     const isTiger = source === 'tiger';
 
     const sql = /* sql */ `
