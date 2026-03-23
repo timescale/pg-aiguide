@@ -8,7 +8,7 @@ on:
 jobs:
   ingest-dev:
     name: Ingest Tiger docs for Dev
-    runs-on: non-prod
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ingest
