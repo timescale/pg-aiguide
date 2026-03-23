@@ -4,15 +4,27 @@ import { embed } from 'ai';
 import { z } from 'zod';
 import type { ServerContext } from '../types.js';
 
-const pg_versions = ['14', '15', '16', '17', '18'] as const;
-const latest_pg_version = pg_versions.at(-1) as (typeof pg_versions)[number];
-const versions = [...pg_versions, 'latest'] as const;
+type SourceType = 'tiger' | 'postgres' | 'postgis';
+const ENTITY_NAME_MAPPINGS: Partial<Record<SourceType, string>> = {
+  tiger: 'timescale',
+};
 
 const inputSchema = {
   source: z
-    .enum(['tiger', 'postgres', 'postgis'])
+    .enum([
+      'tiger',
+      'postgres_14',
+      'postgres_15',
+      'postgres_16',
+      'postgres_17',
+      'postgres_18',
+      'postgis_3.3',
+      'postgis_3.4',
+      'postgis_3.5',
+      'postgis_3.6',
+    ])
     .describe(
-      'The documentation source to search. "tiger" for Tiger Cloud and TimescaleDB, "postgres" for PostgreSQL, "postgis" for PostGIS spatial extension.',
+      'The documentation source to search. "tiger" for Tiger Cloud and TimescaleDB, "postgres" for PostgreSQL, "postgis" for PostGIS spatial extension. Specific versions provided with _X.X suffixes.',
     ),
   search_type: z
     .enum(['semantic', 'keyword'])
@@ -24,16 +36,13 @@ const inputSchema = {
     .describe(
       'The search query. For semantic search, use natural language. For keyword search, provide keywords.',
     ),
-  version: z
-    .enum(versions)
-    .nullable()
-    .describe(
-      'The PostgreSQL major version (ignored when searching "tiger"). Recommended to assume the latest version if unknown. Only applicable when source is Postgres. Defaults to latest version.',
-    ),
   limit: z.coerce
     .number()
     .int()
-    .describe('The maximum number of matches to return. Default is 10.'),
+    .nullable()
+    .describe(
+      'The maximum number of matches to return. If not provided, default is 10.',
+    ),
 } as const;
 
 const zBaseResult = z.object({
@@ -89,138 +98,66 @@ export const searchDocsFactory: ApiFactory<
       'Search documentation using semantic or keyword search. Supports Tiger Cloud (TimescaleDB), PostgreSQL, and PostGIS.',
     inputSchema,
     outputSchema,
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+    },
   },
   fn: async ({
-    source,
+    source: passedSource,
     search_type,
     query,
-    version: passedVersion,
     limit: passedLimit,
   }): Promise<OutputSchema> => {
-    const limit = passedLimit > 0 ? passedLimit : 10;
+    const limit = passedLimit != null ? passedLimit : 10;
+    if (limit <= 0) {
+      throw new Error('Limit must be a positive integer.');
+    }
 
     if (!query.trim()) {
       throw new Error('Query must be a non-empty string.');
     }
+    const [source, version] = passedSource.split('_');
 
-    const version =
-      passedVersion === 'latest' ? latest_pg_version : passedVersion;
+    if (!source) throw new Error('Invalid source');
 
-    if (search_type === 'semantic') {
-      const { embedding } = await embed({
-        model: openai.embedding('text-embedding-3-small'),
-        value: query,
-      });
+    const entityPrefix = ENTITY_NAME_MAPPINGS[source as SourceType] ?? source;
 
-      if (source === 'tiger') {
-        const result = await pgPool.query<SemanticResult>(
-          /* sql */ `
-SELECT
-  id::int,
-  content,
-  metadata::text,
-  embedding <=> $1::vector(1536) AS distance
- FROM ${schema}.timescale_chunks
- ORDER BY distance
- LIMIT $2
-`,
-          [JSON.stringify(embedding), limit],
-        );
-        return { results: result.rows };
-      } else if (source === 'postgres') {
-        // postgres
-        const result = await pgPool.query<SemanticResult>(
-          /* sql */ `
-SELECT
-  c.id::int,
-  c.content,
-  c.metadata::text,
-  c.embedding <=> $1::vector(1536) AS distance
- FROM ${schema}.postgres_chunks c
- JOIN ${schema}.postgres_pages p ON c.page_id = p.id
- WHERE p.version = $2
- ORDER BY distance
- LIMIT $3
-`,
-          [JSON.stringify(embedding), version, limit],
-        );
-        return { results: result.rows };
-      } else if (source === 'postgis') {
-        const result = await pgPool.query<SemanticResult>(
-          /* sql */ `
-SELECT
-  id::int,
-  content,
-  metadata::text,
-  embedding <=> $1::vector(1536) AS distance
- FROM ${schema}.postgis_chunks
- ORDER BY distance
- LIMIT $2
-`,
-          [JSON.stringify(embedding), limit],
-        );
-        return { results: result.rows };
-      } else {
-        // @ts-expect-error exhaustive cases
-        throw new Error(`Unsupported source: ${source.toString()}`);
-      }
-    } else if (search_type === 'keyword') {
-      if (source === 'tiger') {
-        const result = await pgPool.query<KeywordResult>(
-          /* sql */ `
-SELECT
-  id::int,
-  content,
-  metadata::text,
-  -(content <@> to_bm25query($1, '${schema}.timescale_chunks_content_idx')) as score
- FROM ${schema}.timescale_chunks
- ORDER BY content <@> to_bm25query($1, '${schema}.timescale_chunks_content_idx')
- LIMIT $2
-`,
-          [query, limit],
-        );
-        return { results: result.rows };
-      } else if (source === 'postgres') {
-        const result = await pgPool.query<KeywordResult>(
-          /* sql */ `
-SELECT
-  c.id::int,
-  c.content,
-  c.metadata::text,
-  -(c.content <@> to_bm25query($1, '${schema}.postgres_chunks_content_idx')) as score
- FROM ${schema}.postgres_chunks c
- JOIN ${schema}.postgres_pages p ON c.page_id = p.id
- WHERE p.version = $2
- ORDER BY c.content <@> to_bm25query($1, '${schema}.postgres_chunks_content_idx')
- LIMIT $3
-`,
-          [query, version, limit],
-        );
+    const isSemantic = search_type === 'semantic';
+    const searchParam = isSemantic
+      ? JSON.stringify(
+          (
+            await embed({
+              model: openai.embedding('text-embedding-3-small'),
+              value: query,
+            })
+          ).embedding,
+        )
+      : query;
 
-        return { results: result.rows };
-      } else if (source === 'postgis') {
-        const result = await pgPool.query<KeywordResult>(
-          /* sql */ `
-SELECT
-  id::int,
-  content,
-  metadata::text,
-  -(content <@> to_bm25query($1, '${schema}.postgis_chunks_content_idx')) as score
- FROM ${schema}.postgis_chunks
- ORDER BY content <@> to_bm25query($1, '${schema}.postgis_chunks_content_idx')
- LIMIT $2
-`,
-          [query, limit],
-        );
-        return { results: result.rows };
-      } else {
-        // @ts-expect-error exhaustive cases
-        throw new Error(`Unsupported source: ${source.toString()}`);
-      }
-    } else {
-      // @ts-expect-error exhaustive cases
-      throw new Error(`Unsupported search_type: ${search_type.toString()}`);
-    }
+    const sql = /* sql */ `
+        SELECT
+          c.id::int,
+          c.content,
+          c.metadata::text,
+          ${isSemantic ? `c.embedding <=> $1::vector(1536) AS distance` : `  -(c.content <@> to_bm25query($1, '${schema}.${entityPrefix}_chunks_content_idx')) as score`}
+        FROM ${schema}.${entityPrefix}_chunks c
+        ${
+          version
+            ? `JOIN ${schema}.${entityPrefix}_pages p ON c.page_id = p.id
+        WHERE p.version = $2`
+            : ``
+        }
+        ORDER BY ${isSemantic ? 'distance' : `c.content <@> to_bm25query($1, '${schema}.${entityPrefix}_chunks_content_idx')`}
+        LIMIT $${version ? '3' : '2'}
+        `;
+
+    const params = [searchParam, ...(version ? [version] : []), limit];
+    const result = await pgPool.query<SemanticResult | KeywordResult>(
+      sql,
+      params,
+    );
+    return { results: result.rows };
   },
   pickResult: (r) => r.results,
 });
