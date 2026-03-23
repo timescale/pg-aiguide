@@ -9,7 +9,7 @@ jobs:
       - name: Dispatch Workflow
         uses: timescale/workflow-dispatch-action@main
         with:
-          github-token: ${{ secrets.ORG_GITHUB_AGENTS_TOKEN }}
+          github-token: ${{ secrets.ORG_AUTOMATION_TOKEN }}
           owner: timescale
           repo: tiger-agents-deploy
           workflow_id: deploy.yaml
