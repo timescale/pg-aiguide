@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: non-prod
+    runs-on: ubuntu-latest
     steps:
       - name: Dispatch Workflow
         uses: timescale/workflow-dispatch-action@main

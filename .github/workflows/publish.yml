@@ -14,7 +14,7 @@ permissions:
 jobs:
   publish-npm:
     name: Publish package to npm
-    runs-on: non-prod
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -26,7 +26,7 @@ jobs:
 
   publish-docker:
     name: Publish Docker Images
-    runs-on: non-prod
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -68,7 +68,7 @@ jobs:
 
   publish-mcp:
     name: Publish package to MCP Registry
-    runs-on: non-prod
+    runs-on: ubuntu-latest
     needs:
       - publish-npm
       - publish-docker
@@ -88,7 +88,7 @@ jobs:
 
   notify-publish:
     name: Notify publish to Slack
-    runs-on: non-prod
+    runs-on: ubuntu-latest
     needs:
       - publish-npm
       - publish-docker
