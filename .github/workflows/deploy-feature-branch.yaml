@@ -4,7 +4,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: non-prod
     steps:
       - name: Dispatch Workflow
         uses: timescale/workflow-dispatch-action@main
@@ -13,5 +13,5 @@ jobs:
           owner: timescale
           repo: tiger-agents-deploy
           workflow_id: deploy.yaml
-          ref: 'main'
+          ref: "main"
           inputs: '{"repository": "pg-aiguide", "sha": "${{ github.sha }}"}'

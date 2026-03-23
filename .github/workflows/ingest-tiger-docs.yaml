@@ -2,13 +2,13 @@ name: Ingest Tiger Docs
 
 on:
   schedule:
-    - cron: '0 2 * * 0'
+    - cron: "0 2 * * 0"
   workflow_dispatch:
 
 jobs:
   ingest-dev:
     name: Ingest Tiger docs for Dev
-    runs-on: ubuntu-latest
+    runs-on: non-prod
     defaults:
       run:
         working-directory: ingest
