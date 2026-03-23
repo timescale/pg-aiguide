@@ -5,14 +5,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'PostgreSQL version to ingest (e.g. 14, 15, etc.)'
+        description: "PostgreSQL version to ingest (e.g. 14, 15, etc.)"
         required: true
-        default: '17'
+        default: "17"
 
 jobs:
   ingest-dev:
     name: Ingest PostgreSQL docs for Dev
-    runs-on: ubuntu-latest
+    runs-on: non-prod
     defaults:
       run:
         working-directory: ingest
