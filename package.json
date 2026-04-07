@@ -19,6 +19,7 @@
   ],
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
+    "check": "./bun i --silent && ./bun run typecheck && ./bun run lint --write && ./bun run validate-skills && ./bun test --only-failures",
     "inspector": "./bun x @modelcontextprotocol/inspector",
     "lint": "biome check",
     "validate-skills": "./bun scripts/validate-skills.ts",
