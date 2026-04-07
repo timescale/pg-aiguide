@@ -30,20 +30,21 @@ function parseFrontmatter(content: string): Record<string, string> | null {
 
   const fm: Record<string, string> = {};
   const raw = match[1];
+  if (!raw) return fm;
 
   // Extract name (single line)
   const nameMatch = raw.match(/^name:\s*(.+)$/m);
-  if (nameMatch) fm.name = nameMatch[1].trim();
+  if (nameMatch?.[1]) fm.name = nameMatch[1].trim();
 
   // Extract description (may be multi-line with | syntax)
   const descMatch = raw.match(
     /^description:\s*\|?\s*\n([\s\S]*?)(?=\n[a-z][\w-]*:|\n?$)/m,
   );
-  if (descMatch) {
+  if (descMatch?.[1]) {
     fm.description = descMatch[1].trim();
   } else {
     const singleDescMatch = raw.match(/^description:\s*(.+)$/m);
-    if (singleDescMatch) fm.description = singleDescMatch[1].trim();
+    if (singleDescMatch?.[1]) fm.description = singleDescMatch[1].trim();
   }
 
   return fm;
@@ -131,7 +132,7 @@ function validateSkill(skillDir: string): ValidationError[] {
 
   // Check body line count
   const bodyMatch = content.match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/);
-  if (bodyMatch) {
+  if (bodyMatch?.[1]) {
     const bodyLines = bodyMatch[1].split('\n').length;
     if (bodyLines > MAX_BODY_LINES) {
       errors.push({

@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "./",
     "target": "ESNext",
     "module": "Preserve",
     "moduleResolution": "bundler",
@@ -17,6 +17,6 @@
     "sourceMap": true,
     "inlineSources": true
   },
-  "include": ["./src/**/*.ts"],
+  "include": ["./src/**/*.ts", "./scripts/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
