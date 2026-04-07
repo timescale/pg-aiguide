@@ -17,3 +17,5 @@ jobs:
         run: ./bun run lint
       - name: Typecheck
         run: ./bun run typecheck
+      - name: Validate skills
+        run: ./bun run validate-skills

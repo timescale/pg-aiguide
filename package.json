@@ -21,6 +21,7 @@
     "build": "tsc && shx chmod +x dist/*.js",
     "inspector": "./bun x @modelcontextprotocol/inspector",
     "lint": "biome check",
+    "validate-skills": "./bun scripts/validate-skills.ts",
     "migrate": "migrate",
     "prepublishOnly": "./bun run build",
     "start": "./bun src/index.ts",
