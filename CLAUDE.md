@@ -5,6 +5,7 @@
 - Build: `./bun run build` - Compiles TypeScript to JavaScript
 - Watch mode: `./bun run watch http` - Watches for changes and rebuilds automatically
 - Run server: `./bun run start stdio` - Starts the MCP server using stdio transport
+- Checks: `./bun run check` - All-in-one command to lint and test. Run before every commit.
 
 ## Code Style Guidelines
 

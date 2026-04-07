@@ -8,8 +8,9 @@ pg-aiguide helps AI coding tools write dramatically better PostgreSQL code. It p
 - **AI-optimized “skills”** — curated, opinionated Postgres best practices used automatically by AI agents
 - **Extension ecosystem docs**, starting with TimescaleDB, with more coming soon
 
-Use it either as:
+Use it as:
 
+- **Agent Skills** via `npx skills` — works with Claude Code, Cursor, Codex, Gemini CLI, and 40+ other agents
 - a **public MCP server** that can be used with any AI coding agent, or
 - a **Claude Code plugin** optimized for use with Claude's native skill support.
 
@@ -49,7 +50,27 @@ Conclusion: _pg-aiguide produces more robust, performant, maintainable schemas._
 
 ## 🚀 Quickstart
 
-pg-aiguide is available as a **public MCP server**:
+### Agent Skills
+
+Install curated PostgreSQL best-practice skills for your AI coding agent:
+
+```bash
+npx skills add timescale/pg-aiguide --skill postgres
+```
+
+Or pick individual skills interactively:
+
+```bash
+npx skills add timescale/pg-aiguide
+```
+
+Works with Claude Code, Cursor, Codex, Gemini CLI, VS Code, and [40+ other agents](https://agentskills.io).
+
+For even deeper PostgreSQL knowledge, also add the [MCP server](#mcp-server) to give your agent semantic search over the official PostgreSQL, TimescaleDB, and PostGIS manuals.
+
+### MCP Server
+
+For semantic search over PostgreSQL, TimescaleDB, and PostGIS documentation, add the **public MCP server**:
 
 [https://mcp.tigerdata.com/docs](https://mcp.tigerdata.com/docs)
 
@@ -75,9 +96,7 @@ claude plugin marketplace add timescale/pg-aiguide
 claude plugin install pg@aiguide
 ```
 
-### Install by environment
-
-#### One-click installs
+#### Install by environment
 
 [![Install in Cursor](https://img.shields.io/badge/Install_in-Cursor-000000?style=flat-square&logoColor=white)](https://cursor.com/en/install-mcp?name=pg-aiguide&config=eyJuYW1lIjoicGctYWlndWlkZSIsInR5cGUiOiJodHRwIiwidXJsIjoiaHR0cHM6Ly9tY3AudGlnZXJkYXRhLmNvbS9kb2NzIn0=)
 [![Install in VS Code](https://img.shields.io/badge/Install_in-VS_Code-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=pg-aiguide&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.tigerdata.com%2Fdocs%22%7D)

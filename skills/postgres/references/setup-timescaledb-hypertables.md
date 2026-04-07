@@ -1,0 +1,1 @@
+../../setup-timescaledb-hypertables/SKILL.md
