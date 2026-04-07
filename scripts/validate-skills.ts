@@ -9,10 +9,10 @@
  * - SKILL.md body: recommended <500 lines
  */
 
-import { readFileSync, readdirSync, statSync, lstatSync } from "node:fs";
-import { join, basename } from "node:path";
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { basename, join } from 'node:path';
 
-const SKILLS_DIR = join(import.meta.dirname, "..", "skills");
+const SKILLS_DIR = join(import.meta.dirname, '..', 'skills');
 const NAME_REGEX = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 const MAX_NAME_LENGTH = 64;
 const MAX_DESCRIPTION_LENGTH = 1024;
@@ -21,7 +21,7 @@ const MAX_BODY_LINES = 500;
 interface ValidationError {
   skill: string;
   message: string;
-  severity: "error" | "warning";
+  severity: 'error' | 'warning';
 }
 
 function parseFrontmatter(content: string): Record<string, string> | null {
@@ -52,16 +52,16 @@ function parseFrontmatter(content: string): Record<string, string> | null {
 function validateSkill(skillDir: string): ValidationError[] {
   const errors: ValidationError[] = [];
   const dirName = basename(skillDir);
-  const skillMdPath = join(skillDir, "SKILL.md");
+  const skillMdPath = join(skillDir, 'SKILL.md');
 
   let content: string;
   try {
-    content = readFileSync(skillMdPath, "utf-8");
+    content = readFileSync(skillMdPath, 'utf-8');
   } catch {
     errors.push({
       skill: dirName,
-      message: "Missing SKILL.md file",
-      severity: "error",
+      message: 'Missing SKILL.md file',
+      severity: 'error',
     });
     return errors;
   }
@@ -70,8 +70,8 @@ function validateSkill(skillDir: string): ValidationError[] {
   if (!fm) {
     errors.push({
       skill: dirName,
-      message: "Missing or malformed YAML frontmatter",
-      severity: "error",
+      message: 'Missing or malformed YAML frontmatter',
+      severity: 'error',
     });
     return errors;
   }
@@ -80,36 +80,36 @@ function validateSkill(skillDir: string): ValidationError[] {
   if (!fm.name) {
     errors.push({
       skill: dirName,
-      message: "Missing required field: name",
-      severity: "error",
+      message: 'Missing required field: name',
+      severity: 'error',
     });
   } else {
     if (fm.name.length > MAX_NAME_LENGTH) {
       errors.push({
         skill: dirName,
         message: `name exceeds ${MAX_NAME_LENGTH} chars (${fm.name.length})`,
-        severity: "error",
+        severity: 'error',
       });
     }
     if (!NAME_REGEX.test(fm.name)) {
       errors.push({
         skill: dirName,
         message: `name "${fm.name}" must be lowercase alphanumeric with hyphens, no leading/trailing/consecutive hyphens`,
-        severity: "error",
+        severity: 'error',
       });
     }
-    if (fm.name.includes("--")) {
+    if (fm.name.includes('--')) {
       errors.push({
         skill: dirName,
         message: `name "${fm.name}" contains consecutive hyphens`,
-        severity: "error",
+        severity: 'error',
       });
     }
     if (fm.name !== dirName) {
       errors.push({
         skill: dirName,
         message: `name "${fm.name}" does not match directory name "${dirName}"`,
-        severity: "error",
+        severity: 'error',
       });
     }
   }
@@ -118,26 +118,26 @@ function validateSkill(skillDir: string): ValidationError[] {
   if (!fm.description) {
     errors.push({
       skill: dirName,
-      message: "Missing required field: description",
-      severity: "error",
+      message: 'Missing required field: description',
+      severity: 'error',
     });
   } else if (fm.description.length > MAX_DESCRIPTION_LENGTH) {
     errors.push({
       skill: dirName,
       message: `description exceeds ${MAX_DESCRIPTION_LENGTH} chars (${fm.description.length})`,
-      severity: "error",
+      severity: 'error',
     });
   }
 
   // Check body line count
   const bodyMatch = content.match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/);
   if (bodyMatch) {
-    const bodyLines = bodyMatch[1].split("\n").length;
+    const bodyLines = bodyMatch[1].split('\n').length;
     if (bodyLines > MAX_BODY_LINES) {
       errors.push({
         skill: dirName,
         message: `SKILL.md body is ${bodyLines} lines (recommended max: ${MAX_BODY_LINES}). Consider splitting into references/`,
-        severity: "warning",
+        severity: 'warning',
       });
     }
   }
@@ -162,10 +162,10 @@ let hasWarnings = false;
 for (const dir of dirs) {
   const errors = validateSkill(dir);
   for (const err of errors) {
-    const prefix = err.severity === "error" ? "ERROR" : "WARN";
+    const prefix = err.severity === 'error' ? 'ERROR' : 'WARN';
     console.log(`${prefix}: [${err.skill}] ${err.message}`);
-    if (err.severity === "error") hasErrors = true;
-    if (err.severity === "warning") hasWarnings = true;
+    if (err.severity === 'error') hasErrors = true;
+    if (err.severity === 'warning') hasWarnings = true;
   }
 }
 
