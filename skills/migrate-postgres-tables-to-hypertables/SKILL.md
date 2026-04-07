@@ -15,6 +15,10 @@ description: |
   **Keywords:** migrate to hypertable, convert table, Timescale, TimescaleDB, blue-green migration, in-place conversion, create_hypertable, migration validation, compression setup
 
   Step-by-step migration planning including: partition column selection, chunk interval calculation, PK/constraint handling, migration execution (in-place vs blue-green), and performance validation queries.
+license: Apache-2.0
+compatibility: Requires PostgreSQL 15+ with TimescaleDB
+metadata:
+  author: tigerdata
 ---
 
 # PostgreSQL to TimescaleDB Hypertable Migration

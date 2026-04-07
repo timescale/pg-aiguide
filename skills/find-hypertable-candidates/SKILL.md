@@ -14,6 +14,10 @@ description: |
   **Keywords:** hypertable candidate, table analysis, migration assessment, Timescale, TimescaleDB, time-series detection, insert-heavy tables, event logs, audit tables
 
   Provides SQL queries to analyze table statistics, index patterns, and query patterns. Includes scoring criteria (8+ points = good candidate) and pattern recognition for IoT, events, transactions, and sequential data.
+license: Apache-2.0
+compatibility: Requires PostgreSQL 15+ with TimescaleDB
+metadata:
+  author: tigerdata
 ---
 
 # PostgreSQL Hypertable Candidate Analysis

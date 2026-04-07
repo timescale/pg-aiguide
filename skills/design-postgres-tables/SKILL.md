@@ -14,6 +14,9 @@ description: |
   **Keywords:** PostgreSQL schema, table design, data types, PRIMARY KEY, FOREIGN KEY, indexes, B-tree, GIN, JSONB, constraints, normalization, identity columns, partitioning, row-level security
 
   Comprehensive reference covering data types, indexing strategies, constraints, JSONB patterns, partitioning, and PostgreSQL-specific best practices.
+license: Apache-2.0
+metadata:
+  author: tigerdata
 ---
 
 # PostgreSQL Table Design

@@ -14,6 +14,10 @@ description: |
   **Keywords:** pgvector, embeddings, semantic search, vector similarity, HNSW, IVFFlat, halfvec, cosine distance, nearest neighbor, RAG, LLM, AI search
 
   Covers: halfvec storage, HNSW index configuration (m, ef_construction, ef_search), quantization strategies, filtered search, bulk loading, and performance tuning.
+license: Apache-2.0
+compatibility: Requires PostgreSQL 15+ with the pgvector extension
+metadata:
+  author: tigerdata
 ---
 
 # pgvector for Semantic Search

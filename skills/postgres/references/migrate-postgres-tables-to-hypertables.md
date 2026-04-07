@@ -1,0 +1,1 @@
+../../migrate-postgres-tables-to-hypertables/SKILL.md

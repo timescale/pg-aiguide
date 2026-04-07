@@ -14,6 +14,10 @@ description: |
   **Keywords:** hybrid search, BM25, pg_textsearch, RRF, reciprocal rank fusion, keyword search, full-text search, reranking, cross-encoder
 
   Covers: pg_textsearch BM25 index setup, parallel query patterns, client-side RRF fusion (Python/TypeScript), weighting strategies, and optional ML reranking.
+license: Apache-2.0
+compatibility: Requires PostgreSQL 15+ with pgvector and pg_textsearch extensions
+metadata:
+  author: tigerdata
 ---
 
 # Hybrid Text Search

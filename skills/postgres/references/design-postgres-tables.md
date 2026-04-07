@@ -1,0 +1,1 @@
+../../design-postgres-tables/SKILL.md

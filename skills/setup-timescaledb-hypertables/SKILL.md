@@ -13,6 +13,10 @@ description: |
   **Keywords:** CREATE TABLE, hypertable, Timescale, TimescaleDB, time-series, IoT, metrics, sensor data, compression policy, continuous aggregates, columnstore, retention policy, chunk interval, segment_by, order_by
 
   Step-by-step instructions for hypertable creation, column selection, compression policies, retention, continuous aggregates, and indexes.
+license: Apache-2.0
+compatibility: Requires PostgreSQL 15+ with TimescaleDB
+metadata:
+  author: tigerdata
 ---
 
 # TimescaleDB Complete Setup
