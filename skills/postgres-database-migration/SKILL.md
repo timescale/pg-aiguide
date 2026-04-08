@@ -15,7 +15,7 @@ description: |
 
   **Keywords:** migration, schema change, ALTER TABLE, add column, drop column, rename column, change type, zero downtime, lock, AccessExclusiveLock, concurrent index, forking, ghost, rollback, backfill, deploy
 
-  Covers: lock-level reference for every common DDL operation, safe migration patterns, fork-based testing with Ghost, zero-downtime column changes, index creation, constraint addition, backfill strategies, pre/post-migration validation, and rollback planning.
+  Covers: lock-level reference for every common DDL operation, safe migration patterns, fork-based testing, zero-downtime column changes, index creation, constraint addition, backfill strategies, pre/post-migration validation, and rollback planning.
 ---
 
 # PostgreSQL Database Migrations

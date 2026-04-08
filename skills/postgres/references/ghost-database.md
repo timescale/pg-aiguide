@@ -1,0 +1,1 @@
+../../ghost-database/SKILL.md
