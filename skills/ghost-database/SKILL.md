@@ -22,12 +22,9 @@ metadata:
 
 # Ghost Database Management
 
-Ghost is a managed PostgreSQL service designed for agents. It offers two tiers:
+Ghost is a managed PostgreSQL service designed for agents. Your account is organized into Spaces, each with unlimited databases and forks sharing a pool of compute hours (billed in 15-minute chunks when queries are executed). Free tier: 100 hours/month, 1TB storage.
 
-- **Spaces** — shared environments for development, experimentation, and production workloads with many mostly-inactive databases. Create unlimited databases and forks for a fixed number of compute hours (billed in 15-minute chunks when queries are executed). Free tier: 100 hours/month, 1TB storage.
-- **Dedicated instances** — always-on databases for production workloads. Pay for a continuously running instance when you're ready to go live.
-
-The workflow: prototype and iterate in a Space, then move to a dedicated instance for production.
+When you need continuous operation, promote any database to a **dedicated instance** — a separately billed, always-on database.
 
 Additional features:
 - **CLI and MCP native:** create and query databases from the terminal or any MCP-compatible agent
