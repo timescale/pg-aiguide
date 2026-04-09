@@ -37,7 +37,7 @@ These complete in milliseconds regardless of table size. They only hold a brief 
 | `DROP COLUMN` | `AccessExclusiveLock` (brief) | **Fast.** Column marked invisible; space reclaimed by VACUUM over time. |
 | `SET DEFAULT` / `DROP DEFAULT` | `AccessExclusiveLock` (brief) | Metadata change only. Does not touch existing rows. |
 | `CREATE INDEX CONCURRENTLY` | `ShareUpdateExclusiveLock` | **Non-blocking.** Allows reads and writes during build. Slower than regular index creation. |
-| `DROP INDEX CONCURRENTLY` | None (blocking) | Waits for queries using the index to finish, then drops. |
+| `DROP INDEX CONCURRENTLY` | `ShareUpdateExclusiveLock` | **Non-blocking.** Waits for queries using the index to finish, then drops. No table-level exclusive lock. |
 | `RENAME COLUMN` | `AccessExclusiveLock` (brief) | Metadata change only. Fast. |
 | `RENAME TABLE` | `AccessExclusiveLock` (brief) | Metadata change only. Fast. |
 | `ADD CONSTRAINT ... NOT VALID` | `ShareUpdateExclusiveLock` | Adds constraint for new rows only. Does not scan existing data. |
