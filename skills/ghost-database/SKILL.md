@@ -35,8 +35,32 @@ Website: https://ghost.build
 
 ## Installation
 
+Multiple installation methods are provided. If you aren't sure, use the first one.
+
+### Install Script (macOS/Linux/WSL)
+
 ```bash
 curl -fsSL https://install.ghost.build | sh
+```
+
+### Install Script (Windows PowerShell)
+
+```powershell
+irm https://install.ghost.build/install.ps1 | iex
+```
+
+### Debian/Ubuntu
+
+```bash
+curl -s https://packagecloud.io/install/repositories/timescale/ghost/script.deb.sh | sudo os=any dist=any bash
+sudo apt-get install ghost
+```
+
+### Red Hat/Fedora
+
+```bash
+curl -s https://packagecloud.io/install/repositories/timescale/ghost/script.rpm.sh | sudo os=rpm_any dist=rpm_any bash
+sudo yum install ghost
 ```
 
 ## Getting Started
