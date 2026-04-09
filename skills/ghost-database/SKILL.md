@@ -32,7 +32,6 @@ Additional features:
 - **MCP read-only mode:** `ghost config set read_only true` locks all MCP tools into read-only — SQL queries execute in read-only mode and destructive tools (`ghost_delete`, `ghost_password`, `ghost_rename`) are blocked
 
 Website: https://ghost.build
-GitHub: https://github.com/timescale/ghost
 
 ## Installation
 
