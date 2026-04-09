@@ -193,6 +193,7 @@ Once running, agents have access to these tools:
 | `ghost_login` | Authenticate with GitHub OAuth |
 | `ghost_feedback` | Submit feedback |
 | `search_docs` | Search Ghost and Postgres documentation |
+| `view_skill` | View documentation for a specific topic |
 
 ## When to Use Ghost
 
