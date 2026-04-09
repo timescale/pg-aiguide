@@ -415,6 +415,17 @@ END $$;
 
 This prevents the migration from creating a pile-up of blocked queries behind it. Each attempt either succeeds quickly or gives up and lets normal traffic flow.
 
+**Alternative: `NOWAIT`** — For the highest-traffic systems, use `LOCK TABLE ... NOWAIT` to test lock availability before running DDL. Unlike `lock_timeout`, `NOWAIT` fails instantly without ever entering the lock queue, so there is zero risk of cascading blocked queries. The tradeoff is more retries:
+
+```sql
+BEGIN;
+LOCK TABLE orders IN ACCESS EXCLUSIVE MODE NOWAIT;
+-- If we get here, we have the lock — run DDL
+ALTER TABLE orders ADD COLUMN tracking_number TEXT;
+COMMIT;
+-- If LOCK fails with "could not obtain lock", retry after a short sleep
+```
+
 ## Fork-Based Migration Testing
 
 The safest way to test a migration is to run it against a copy of your actual database — same schema, same data, same edge cases. The only two providers that support fast database forking are [Neon](https://neon.tech) and [Ghost](https://ghost.build). Without database forking, you need to manually dump and restore your database, which can take a long time for large datasets.
