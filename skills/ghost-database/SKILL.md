@@ -29,7 +29,7 @@ When you need continuous operation, promote any database to a **dedicated instan
 Additional features:
 - **CLI and MCP native:** create and query databases from the terminal or any MCP-compatible agent
 - **Instant forking:** full database copies in seconds for safe experimentation
-- **Read-only access:** connect with `--read-only` for safe agentic work against production data
+- **MCP read-only mode:** `ghost config set read_only true` locks all MCP tools into read-only — SQL queries execute in read-only mode and destructive tools (`ghost_delete`, `ghost_password`, `ghost_rename`) are blocked
 
 Website: https://ghost.build
 GitHub: https://github.com/timescale/ghost
@@ -108,7 +108,8 @@ Returns an LLM-optimized schema representation of all tables, columns, indexes, 
 | `ghost create` | Create a new database (`--name`, `--wait`, `--json`) |
 | `ghost delete` | Delete a database (`--confirm` to skip prompt) |
 | `ghost fork` | Fork a database (`--name`, `--wait`, `--json`) |
-| `ghost connect` | Get connection string (`--read-only` for read replicas) |
+| `ghost connect` | Get connection string (`--read-only` for read-only connections) |
+| `ghost config` | Manage CLI configuration (e.g., `ghost config set read_only true` for MCP read-only mode) |
 | `ghost sql` | Execute SQL query (supports stdin: `cat query.sql \| ghost sql <db>`) |
 | `ghost schema` | Display database schema |
 | `ghost list` | List all databases (`--json`, `--yaml`) |
@@ -131,6 +132,16 @@ ghost mcp install               # Auto-detects your agent (Claude Code, Cursor, 
 ```
 
 Supports: Claude Code, Cursor, Windsurf, Codex, Gemini, VS Code, Kiro.
+
+### MCP Read-Only Mode
+
+To give agents safe read-only access, enable read-only mode before starting the MCP server:
+
+```bash
+ghost config set read_only true
+```
+
+This locks all MCP tools into read-only: `ghost_sql` executes queries in read-only mode, and destructive tools (`ghost_delete`, `ghost_password`, `ghost_rename`) are blocked entirely.
 
 ### MCP Tools
 
