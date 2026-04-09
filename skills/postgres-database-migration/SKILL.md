@@ -445,6 +445,8 @@ This catches problems that never show up in empty test databases:
 - Migrations that are fast on 100 rows but lock the table for minutes on 10 million
 - Index creation that runs out of memory or disk space
 
+**Limitation:** fork-based testing runs your migration in isolation — it won't catch issues caused by concurrent database traffic (e.g., lock contention under load, deadlocks with concurrent writes, or replication lag from heavy WAL generation). For most applications, fork-based testing is sufficient. For very high-uptime applications, use [PgDog](https://pgdog.dev)'s mirroring feature to replay production traffic against the fork — it reproduces queries byte-for-byte with realistic timing, and you can filter to DDL-only or DML-only and control exposure percentage to ramp up gradually.
+
 ### Without Forking
 
 Create a test database from a backup or dump:
