@@ -132,7 +132,6 @@ Returns an LLM-optimized schema representation of all tables, columns, indexes, 
 | `ghost delete` | Delete a database (`--confirm` to skip prompt) |
 | `ghost fork` | Fork a database (`--name`, `--wait`, `--json`) |
 | `ghost connect` | Get connection string (`--read-only` for read-only connections) |
-| `ghost config` | Manage CLI configuration (e.g., `ghost config set read_only true` for MCP read-only mode) |
 | `ghost sql` | Execute SQL query (supports stdin: `cat query.sql \| ghost sql <db>`) |
 | `ghost schema` | Display database schema |
 | `ghost list` | List all databases (`--json`, `--yaml`) |
@@ -143,6 +142,13 @@ Returns an LLM-optimized schema representation of all tables, columns, indexes, 
 | `ghost logs` | View database logs |
 | `ghost psql` | Open interactive psql session (`--read-only`) |
 | `ghost login` | Authenticate with GitHub OAuth (`--headless` for CI) |
+| `ghost logout` | Remove stored credentials |
+| `ghost api-key` | Manage API keys for programmatic access |
+| `ghost config` | Manage CLI configuration (e.g., `ghost config set read_only true`) |
+| `ghost mcp` | Install and manage the Ghost MCP server |
+| `ghost feedback` | Submit feedback, bug reports, or support requests |
+| `ghost version` | Show version information |
+| `ghost completion` | Generate shell autocompletion scripts |
 
 ## MCP Integration
 
