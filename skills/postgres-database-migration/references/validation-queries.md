@@ -71,10 +71,14 @@ FROM pg_class
 WHERE relname = 'orders';
 
 -- Estimate backfill time: run a small batch and extrapolate
+-- WARNING: EXPLAIN ANALYZE actually executes the statement — this WILL update rows.
+-- Run this on a fork, or wrap in a transaction and ROLLBACK after.
+BEGIN;
 EXPLAIN ANALYZE
 UPDATE orders SET amount_new = amount::NUMERIC(12,2)
 WHERE id BETWEEN 1 AND 1000 AND amount_new IS NULL;
 -- If 1,000 rows takes 50ms and you have 10M rows → ~500s total
+ROLLBACK;
 ```
 
 ## Post-Migration Validation
