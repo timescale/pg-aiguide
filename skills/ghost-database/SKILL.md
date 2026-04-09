@@ -14,7 +14,7 @@ description: |
   - Resume or delete Ghost databases
   - Set up the Ghost MCP server or CLI
 
-  **Keywords:** Ghost, ghost.build, database, create database, fork database, PostgreSQL, managed Postgres, MCP, agent database, connection string, ghost_create, ghost_fork, ghost_sql
+  **Keywords:** Ghost, ghost.build, database, create database, fork database, PostgreSQL, managed Postgres, MCP, agent database, connection string
 license: Apache-2.0
 metadata:
   author: tigerdata
