@@ -11,7 +11,7 @@ description: |
   - Need many databases that are billed only when queried
   - Get a connection string for a Ghost database
   - Run SQL queries against a Ghost database
-  - Pause, resume, or delete Ghost databases
+  - Resume or delete Ghost databases
   - Set up the Ghost MCP server or CLI
 
   **Keywords:** Ghost, ghost.build, database, create database, fork database, PostgreSQL, managed Postgres, MCP, agent database, connection string, ghost_create, ghost_fork, ghost_sql
@@ -85,12 +85,11 @@ ghost sql my-app-db "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'us
 ghost delete my-app-db-experiment --confirm
 ```
 
-### Pause and Resume
+### Auto-Pause and Resume
 
-Pause databases you're not actively using to conserve compute hours. Storage is retained.
+Databases automatically pause after 30 days of idle time to conserve compute hours. Storage is retained. Resume a paused database when you need it again:
 
 ```bash
-ghost pause my-app-db
 ghost resume my-app-db --wait
 ```
 
@@ -114,7 +113,6 @@ Returns an LLM-optimized schema representation of all tables, columns, indexes, 
 | `ghost schema` | Display database schema |
 | `ghost list` | List all databases (`--json`, `--yaml`) |
 | `ghost status` | Show space usage |
-| `ghost pause` | Pause a running database |
 | `ghost resume` | Resume a paused database (`--wait`) |
 | `ghost password` | Reset password (`--generate` for auto-generated) |
 | `ghost rename` | Rename a database |
@@ -124,7 +122,7 @@ Returns an LLM-optimized schema representation of all tables, columns, indexes, 
 
 ## MCP Integration
 
-The Ghost MCP server gives agents full database lifecycle control — create, fork, query, inspect, pause, resume, and delete databases without human intervention.
+The Ghost MCP server gives agents full database lifecycle control — create, fork, query, inspect, resume, and delete databases without human intervention.
 
 ### Install the MCP Server
 
@@ -148,8 +146,7 @@ Once running, agents have access to these tools:
 | `ghost_schema` | Display database schema |
 | `ghost_list` | List all databases |
 | `ghost_status` | Show space usage |
-| `ghost_pause` | Pause a database |
-| `ghost_resume` | Resume a database |
+| `ghost_resume` | Resume a paused database |
 | `ghost_password` | Reset password |
 | `ghost_rename` | Rename a database |
 | `ghost_logs` | View logs |
