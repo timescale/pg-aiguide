@@ -67,9 +67,9 @@ sudo yum install ghost
 
 ```bash
 ghost login                     # Authenticate with GitHub
-ghost create                    # Create a new database
-ghost list                      # List all databases
-ghost connect <database>        # Get connection string
+ghost create                    # Create a new database (returns an ID, e.g. abc123)
+ghost list                      # List all databases with their IDs
+ghost connect <id>              # Get connection string
 ```
 
 ## Core Workflows
@@ -77,17 +77,17 @@ ghost connect <database>        # Get connection string
 ### Create and Query a Database
 
 ```bash
-# Create a database
+# Create a database (returns an ID like abc123)
 ghost create --name my-app-db
 
-# Run SQL directly
-ghost sql my-app-db "CREATE TABLE users (id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, email TEXT NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+# Run SQL directly (use the database ID)
+ghost sql abc123 "CREATE TABLE users (id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, email TEXT NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL DEFAULT now())"
 
 # Query it
-ghost sql my-app-db "SELECT * FROM users"
+ghost sql abc123 "SELECT * FROM users"
 
 # Open interactive psql session
-ghost psql my-app-db
+ghost psql abc123
 ```
 
 ### Fork for Safe Experimentation
@@ -95,17 +95,17 @@ ghost psql my-app-db
 Forking creates a full copy of your database in seconds — same schema, same data. Use forks to test migrations, experiment with schema changes, or let agents explore without risk to your working database.
 
 ```bash
-# Fork a database
-ghost fork my-app-db --name my-app-db-experiment
+# Fork a database (returns the fork's ID, e.g. def456)
+ghost fork abc123 --name my-app-db-experiment
 
 # Test changes on the fork
-ghost sql my-app-db-experiment "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"
+ghost sql def456 "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"
 
 # If it worked: apply to original
-ghost sql my-app-db "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"
+ghost sql abc123 "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"
 
 # If it failed: delete the fork, original is untouched
-ghost delete my-app-db-experiment --confirm
+ghost delete def456 --confirm
 ```
 
 ### Auto-Pause and Resume
@@ -113,13 +113,13 @@ ghost delete my-app-db-experiment --confirm
 Databases automatically pause after 30 days of idle time to conserve compute hours. Storage is retained. Resume a paused database when you need it again:
 
 ```bash
-ghost resume my-app-db --wait
+ghost resume abc123 --wait
 ```
 
 ### Inspect Schema
 
 ```bash
-ghost schema my-app-db
+ghost schema abc123
 ```
 
 Returns an LLM-optimized schema representation of all tables, columns, indexes, and constraints.
