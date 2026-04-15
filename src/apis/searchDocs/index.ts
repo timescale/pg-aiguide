@@ -7,33 +7,11 @@ import type {
 import { embed } from 'ai';
 import type { z } from 'zod';
 import type { ServerContext } from '../../types.js';
-import { keywordSearchBySource, semanticSearchBySource } from './queries.js';
+import { searchKeyword, searchSemantic } from './queries.js';
 import { mergeRrf } from './rrf.js';
-import {
-  type DocsBaseSource,
-  inputSchema,
-  latest_pg_version,
-  outputSchema,
-  parseDocsSourceParam,
-} from './schemas.js';
+import { inputSchema, outputSchema, resolveDocsTables } from './schemas.js';
 
 type OutputSchema = InferSchema<typeof outputSchema>;
-
-function versionForQueries(
-  base: DocsBaseSource,
-  versionSuffix: string | null,
-): string | null {
-  if (base === 'tiger') {
-    return null;
-  }
-  if (base === 'postgres' && versionSuffix != null) {
-    return versionSuffix === 'latest' ? latest_pg_version : versionSuffix;
-  }
-  if (base === 'postgis') {
-    return versionSuffix;
-  }
-  return null;
-}
 
 export const searchDocsFactory: ApiFactory<
   ServerContext,
@@ -70,21 +48,19 @@ export const searchDocsFactory: ApiFactory<
       throw new Error('Query must be a non-empty string.');
     }
 
-    const { base, versionSuffix } = parseDocsSourceParam(passedSource);
-    const version = versionForQueries(base, versionSuffix);
+    const { entity, version } = resolveDocsTables(passedSource);
 
     if (search_type === 'semantic') {
       const { embedding } = await embed({
         model: openai.embedding('text-embedding-3-small'),
         value: query,
       });
-      const embeddingJson = JSON.stringify(embedding);
       return {
-        results: await semanticSearchBySource(
-          base,
+        results: await searchSemantic(
           pgPool,
           schema,
-          embeddingJson,
+          entity,
+          JSON.stringify(embedding),
           version,
           limit,
         ),
@@ -93,10 +69,10 @@ export const searchDocsFactory: ApiFactory<
 
     if (search_type === 'keyword') {
       return {
-        results: await keywordSearchBySource(
-          base,
+        results: await searchKeyword(
           pgPool,
           schema,
+          entity,
           query,
           version,
           limit,
@@ -112,15 +88,15 @@ export const searchDocsFactory: ApiFactory<
       const embeddingJson = JSON.stringify(embedding);
       const candLimit = Math.max(limit * 4, 60);
       const [sem, kw] = await Promise.all([
-        semanticSearchBySource(
-          base,
+        searchSemantic(
           pgPool,
           schema,
+          entity,
           embeddingJson,
           version,
           candLimit,
         ),
-        keywordSearchBySource(base, pgPool, schema, query, version, candLimit),
+        searchKeyword(pgPool, schema, entity, query, version, candLimit),
       ]);
       return { results: mergeRrf(sem, kw, limit) };
     }

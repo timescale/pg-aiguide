@@ -5,7 +5,7 @@ import { latest_pg_version } from './schemas.js';
 
 const featureFlags = {} as McpFeatureFlags;
 
-const semanticSearchBySource = mock(
+const searchSemantic = mock(
   async () =>
     [
       {
@@ -17,7 +17,7 @@ const semanticSearchBySource = mock(
     ] as const,
 );
 
-const keywordSearchBySource = mock(
+const searchKeyword = mock(
   async () =>
     [
       {
@@ -30,8 +30,8 @@ const keywordSearchBySource = mock(
 );
 
 mock.module('./queries.js', () => ({
-  semanticSearchBySource,
-  keywordSearchBySource,
+  searchSemantic,
+  searchKeyword,
 }));
 
 const embed = mock(async () => ({
@@ -59,8 +59,8 @@ const api = await Promise.resolve(
 describe('searchDocsFactory fn', () => {
   beforeEach(() => {
     embed.mockClear();
-    semanticSearchBySource.mockClear();
-    keywordSearchBySource.mockClear();
+    searchSemantic.mockClear();
+    searchKeyword.mockClear();
   });
 
   it('keyword search does not call embed', async () => {
@@ -71,19 +71,19 @@ describe('searchDocsFactory fn', () => {
       limit: 10,
     });
     expect(embed).not.toHaveBeenCalled();
-    expect(semanticSearchBySource).not.toHaveBeenCalled();
-    expect(keywordSearchBySource).toHaveBeenCalledTimes(1);
-    expect(keywordSearchBySource).toHaveBeenCalledWith(
-      'tiger',
+    expect(searchSemantic).not.toHaveBeenCalled();
+    expect(searchKeyword).toHaveBeenCalledTimes(1);
+    expect(searchKeyword).toHaveBeenCalledWith(
       pool,
       'docs',
+      'timescale',
       'hello',
       null,
       10,
     );
   });
 
-  it('semantic search calls embed once and semanticSearchBySource', async () => {
+  it('semantic search calls embed once and searchSemantic', async () => {
     await api.fn({
       source: 'postgis_3.4',
       search_type: 'semantic',
@@ -91,12 +91,12 @@ describe('searchDocsFactory fn', () => {
       limit: 5,
     });
     expect(embed).toHaveBeenCalledTimes(1);
-    expect(keywordSearchBySource).not.toHaveBeenCalled();
-    expect(semanticSearchBySource).toHaveBeenCalledTimes(1);
-    expect(semanticSearchBySource).toHaveBeenCalledWith(
-      'postgis',
+    expect(searchKeyword).not.toHaveBeenCalled();
+    expect(searchSemantic).toHaveBeenCalledTimes(1);
+    expect(searchSemantic).toHaveBeenCalledWith(
       pool,
       'docs',
+      'postgis',
       expect.any(String),
       '3.4',
       5,
@@ -110,10 +110,10 @@ describe('searchDocsFactory fn', () => {
       query: 'x',
       limit: 1,
     });
-    expect(keywordSearchBySource).toHaveBeenCalledWith(
-      'postgres',
+    expect(searchKeyword).toHaveBeenCalledWith(
       pool,
       'docs',
+      'postgres',
       'x',
       latest_pg_version,
       1,
@@ -128,18 +128,18 @@ describe('searchDocsFactory fn', () => {
       limit: 10,
     });
     expect(embed).toHaveBeenCalledTimes(1);
-    expect(semanticSearchBySource).toHaveBeenCalledWith(
-      'tiger',
+    expect(searchSemantic).toHaveBeenCalledWith(
       pool,
       'docs',
+      'timescale',
       expect.any(String),
       null,
       60,
     );
-    expect(keywordSearchBySource).toHaveBeenCalledWith(
-      'tiger',
+    expect(searchKeyword).toHaveBeenCalledWith(
       pool,
       'docs',
+      'timescale',
       'both',
       null,
       60,
@@ -166,10 +166,10 @@ describe('searchDocsFactory fn', () => {
       query: 'q',
       limit: null,
     });
-    expect(keywordSearchBySource).toHaveBeenCalledWith(
-      'tiger',
+    expect(searchKeyword).toHaveBeenCalledWith(
       pool,
       'docs',
+      'timescale',
       'q',
       null,
       10,

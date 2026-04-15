@@ -5,9 +5,6 @@ export const latest_pg_version = pg_versions.at(
   -1,
 ) as (typeof pg_versions)[number];
 
-/** Logical source for routing queries (maps to table prefix via ENTITY_NAME_MAPPINGS). */
-export type DocsBaseSource = 'tiger' | 'postgres' | 'postgis';
-
 /**
  * API `source` values: version is encoded in the suffix (e.g. postgres_17, postgis_3.4).
  * Use postgres_latest for the newest bundled Postgres manual version.
@@ -28,26 +25,31 @@ export const docsSourceEnumValues = [
 
 export type DocsSourceParam = (typeof docsSourceEnumValues)[number];
 
-export function parseDocsSourceParam(passed: DocsSourceParam): {
-  base: DocsBaseSource;
-  versionSuffix: string | null;
+/** Maps API `source` to DB table prefix (`tiger` → `timescale`) and query `version` (if any). */
+export function resolveDocsTables(passed: DocsSourceParam): {
+  entity: string;
+  version: string | null;
 } {
   if (passed === 'tiger') {
-    return { base: 'tiger', versionSuffix: null };
+    return { entity: 'timescale', version: null };
   }
   const i = passed.indexOf('_');
   if (i <= 0) {
     throw new Error('Invalid source');
   }
-  const base = passed.slice(0, i) as DocsBaseSource;
+  const kind = passed.slice(0, i);
   const suffix = passed.slice(i + 1);
-  if (base !== 'postgres' && base !== 'postgis') {
-    throw new Error('Invalid source');
-  }
   if (!suffix) {
     throw new Error('Invalid source');
   }
-  return { base, versionSuffix: suffix };
+  if (kind === 'postgres') {
+    const version = suffix === 'latest' ? latest_pg_version : suffix;
+    return { entity: 'postgres', version };
+  }
+  if (kind === 'postgis') {
+    return { entity: 'postgis', version: suffix };
+  }
+  throw new Error('Invalid source');
 }
 
 export const inputSchema = {
