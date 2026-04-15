@@ -1,0 +1,29 @@
+name: Lint and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: ./bun install
+      - name: Run Biome
+        run: ./bun run lint
+      - name: Typecheck
+        run: ./bun run typecheck
+      - name: Validate skills
+        run: ./bun run validate-skills
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: ./bun install
+      - name: Test
+        run: ./bun run test
