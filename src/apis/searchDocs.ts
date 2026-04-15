@@ -176,13 +176,12 @@ async function embeddingJsonForQuery(query: string): Promise<string> {
 
 // --- One explicit implementation per search_type
 
-/** Vector similarity only; returns rows with `distance`. */
+/** Vector similarity only; returns rows with `distance`. Caller supplies `embeddingJson`. */
 async function runSemanticDocsSearch(
   ctx: SearchDocsCtx,
-  query: string,
+  embeddingJson: string,
   limit: number,
 ): Promise<SemanticResult[]> {
-  const embeddingJson = await embeddingJsonForQuery(query);
   const rows = await searchDocsQuery(
     ctx.pool,
     ctx.schema,
@@ -221,29 +220,13 @@ async function runHybridDocsSearch(
   ctx: SearchDocsCtx,
   query: string,
   limit: number,
+  embeddingJson: string,
 ): Promise<HybridResult[]> {
-  const embeddingJson = await embeddingJsonForQuery(query);
   const candidateLimit = Math.min(150, Math.max(limit * 4, 40));
 
   const [semanticRows, keywordRows] = await Promise.all([
-    searchDocsQuery(
-      ctx.pool,
-      ctx.schema,
-      ctx.entityPrefix,
-      true,
-      embeddingJson,
-      candidateLimit,
-      ctx.version,
-    ),
-    searchDocsQuery(
-      ctx.pool,
-      ctx.schema,
-      ctx.entityPrefix,
-      false,
-      query,
-      candidateLimit,
-      ctx.version,
-    ),
+    runSemanticDocsSearch(ctx, embeddingJson, candidateLimit),
+    runKeywordDocsSearch(ctx, query, candidateLimit),
   ]);
 
   const scores = rrfScores(
@@ -273,11 +256,12 @@ async function runHybridDocsSearch(
     }
   }
 
-  return top.map(({ id, rrf_score }) => {
+  const rows = top.map(({ id, rrf_score }) => {
     const row = byId.get(id);
     if (!row) throw new Error(`Missing chunk row for id ${id}`);
     return { id, content: row.content, metadata: row.metadata, rrf_score };
   });
+  return rows as HybridResult[];
 }
 
 // --- API factory
@@ -329,14 +313,22 @@ export const searchDocsFactory: ApiFactory<
     };
 
     switch (search_type) {
-      case 'semantic':
-        return { results: await runSemanticDocsSearch(ctx, query, limit) };
+      case 'semantic': {
+        const embeddingJson = await embeddingJsonForQuery(query);
+        return {
+          results: await runSemanticDocsSearch(ctx, embeddingJson, limit),
+        };
+      }
 
       case 'keyword':
         return { results: await runKeywordDocsSearch(ctx, query, limit) };
 
-      case 'hybrid':
-        return { results: await runHybridDocsSearch(ctx, query, limit) };
+      case 'hybrid': {
+        const embeddingJson = await embeddingJsonForQuery(query);
+        return {
+          results: await runHybridDocsSearch(ctx, query, limit, embeddingJson),
+        };
+      }
 
       default: {
         const _exhaustive: never = search_type;

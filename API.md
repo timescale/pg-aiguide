@@ -24,7 +24,7 @@ Unified search tool for documentation using **semantic** (vector similarity), **
 ```
 
 - **`source`**: `tiger` (Tiger Cloud / TimescaleDB), `postgres_XX` for a specific PostgreSQL manual version, or `postgis_X.X` for PostGIS. There is no separate `version` field.
-- **`search_type`**: `hybrid` runs semantic and keyword search in parallel (two DB queries), fuses ranked lists with RRF (`k = 60`), and returns `rrf_score` per row (no `distance` or `score` on hybrid results).
+- **`search_type`**: `hybrid` runs semantic and keyword search in parallel (two DB queries), fuses ranked lists with RRF (`k = 60`), and returns **`rrf_score`** per row.
 
 #### Output (Semantic Search)
 
