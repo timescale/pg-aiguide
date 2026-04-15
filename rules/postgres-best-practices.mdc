@@ -19,4 +19,4 @@ When writing or reviewing SQL, designing schemas, or working with PostgreSQL:
 - When combining keyword and semantic search, invoke the `postgres-hybrid-text-search` skill.
 - Prefer `search_type: "semantic"` for natural-language questions and `search_type: "keyword"` for exact term lookups.
 - Use `search_type: "hybrid"` when you want both semantic and keyword retrieval fused (RRF); hybrid rows return `rrf_score` instead of `distance` or `score`.
-- Always specify the correct PostgreSQL `version` parameter (14-18 or "latest") to get version-accurate results.
+- For `search_docs`, encode the manual version in `source` (e.g. `postgres_17`, `postgres_latest`, `postgis_3.4`); use `tiger` for Timescale/Tiger Cloud docs.

@@ -11,17 +11,15 @@ const searchDocsInput = z.object({
   source: inputSchema.source,
   search_type: inputSchema.search_type,
   query: inputSchema.query,
-  version: inputSchema.version,
   limit: inputSchema.limit,
 });
 
 describe('searchDocs input schema', () => {
   it('accepts a valid hybrid postgres request', () => {
     const r = searchDocsInput.safeParse({
-      source: 'postgres',
+      source: 'postgres_17',
       search_type: 'hybrid',
       query: 'indexes',
-      version: '17',
       limit: 5,
     });
     expect(r.success).toBe(true);
@@ -29,10 +27,9 @@ describe('searchDocs input schema', () => {
 
   it('rejects invalid source', () => {
     const r = searchDocsInput.safeParse({
-      source: 'mysql',
+      source: 'mysql_8',
       search_type: 'keyword',
       query: 'x',
-      version: null,
       limit: 10,
     });
     expect(r.success).toBe(false);
@@ -43,7 +40,6 @@ describe('searchDocs input schema', () => {
       source: 'tiger',
       search_type: 'fulltext',
       query: 'x',
-      version: null,
       limit: 10,
     });
     expect(r.success).toBe(false);
@@ -51,10 +47,9 @@ describe('searchDocs input schema', () => {
 
   it('coerces limit from string', () => {
     const r = searchDocsInput.safeParse({
-      source: 'postgis',
+      source: 'postgis_3.4',
       search_type: 'semantic',
       query: 'x',
-      version: null,
       limit: '3',
     });
     expect(r.success).toBe(true);
@@ -63,13 +58,12 @@ describe('searchDocs input schema', () => {
     }
   });
 
-  it('accepts null version', () => {
+  it('accepts null limit', () => {
     const r = searchDocsInput.safeParse({
-      source: 'postgres',
+      source: 'postgres_16',
       search_type: 'keyword',
       query: 'x',
-      version: null,
-      limit: 1,
+      limit: null,
     });
     expect(r.success).toBe(true);
   });

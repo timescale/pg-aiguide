@@ -68,7 +68,6 @@ describe('searchDocsFactory fn', () => {
       source: 'tiger',
       search_type: 'keyword',
       query: 'hello',
-      version: null,
       limit: 10,
     });
     expect(embed).not.toHaveBeenCalled();
@@ -86,10 +85,9 @@ describe('searchDocsFactory fn', () => {
 
   it('semantic search calls embed once and semanticSearchBySource', async () => {
     await api.fn({
-      source: 'postgis',
+      source: 'postgis_3.4',
       search_type: 'semantic',
       query: 'types',
-      version: null,
       limit: 5,
     });
     expect(embed).toHaveBeenCalledTimes(1);
@@ -100,17 +98,16 @@ describe('searchDocsFactory fn', () => {
       pool,
       'docs',
       expect.any(String),
-      null,
+      '3.4',
       5,
     );
   });
 
-  it('resolves version latest to latest_pg_version for postgres', async () => {
+  it('resolves postgres_latest to latest_pg_version', async () => {
     await api.fn({
-      source: 'postgres',
+      source: 'postgres_latest',
       search_type: 'keyword',
       query: 'x',
-      version: 'latest',
       limit: 1,
     });
     expect(keywordSearchBySource).toHaveBeenCalledWith(
@@ -128,7 +125,6 @@ describe('searchDocsFactory fn', () => {
       source: 'tiger',
       search_type: 'hybrid',
       query: 'both',
-      version: null,
       limit: 10,
     });
     expect(embed).toHaveBeenCalledTimes(1);
@@ -158,19 +154,17 @@ describe('searchDocsFactory fn', () => {
         source: 'tiger',
         search_type: 'keyword',
         query: '   ',
-        version: null,
         limit: 10,
       }),
     ).rejects.toThrow('Query must be a non-empty string.');
   });
 
-  it('uses limit 10 when passed limit is 0', async () => {
+  it('uses limit 10 when passed limit is null', async () => {
     await api.fn({
       source: 'tiger',
       search_type: 'keyword',
       query: 'q',
-      version: null,
-      limit: 0,
+      limit: null,
     });
     expect(keywordSearchBySource).toHaveBeenCalledWith(
       'tiger',
@@ -180,5 +174,16 @@ describe('searchDocsFactory fn', () => {
       null,
       10,
     );
+  });
+
+  it('rejects non-positive limit', async () => {
+    await expect(
+      api.fn({
+        source: 'tiger',
+        search_type: 'keyword',
+        query: 'q',
+        limit: 0,
+      }),
+    ).rejects.toThrow('Limit must be a positive integer.');
   });
 });

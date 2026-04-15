@@ -9,9 +9,31 @@ import type { z } from 'zod';
 import type { ServerContext } from '../../types.js';
 import { keywordSearchBySource, semanticSearchBySource } from './queries.js';
 import { mergeRrf } from './rrf.js';
-import { inputSchema, latest_pg_version, outputSchema } from './schemas.js';
+import {
+  type DocsBaseSource,
+  inputSchema,
+  latest_pg_version,
+  outputSchema,
+  parseDocsSourceParam,
+} from './schemas.js';
 
 type OutputSchema = InferSchema<typeof outputSchema>;
+
+function versionForQueries(
+  base: DocsBaseSource,
+  versionSuffix: string | null,
+): string | null {
+  if (base === 'tiger') {
+    return null;
+  }
+  if (base === 'postgres' && versionSuffix != null) {
+    return versionSuffix === 'latest' ? latest_pg_version : versionSuffix;
+  }
+  if (base === 'postgis') {
+    return versionSuffix;
+  }
+  return null;
+}
 
 export const searchDocsFactory: ApiFactory<
   ServerContext,
@@ -28,22 +50,28 @@ export const searchDocsFactory: ApiFactory<
       'Search documentation using semantic, keyword, or hybrid (RRF) search. Supports Tiger Cloud (TimescaleDB), PostgreSQL, and PostGIS.',
     inputSchema,
     outputSchema,
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+    },
   },
   fn: async ({
-    source,
+    source: passedSource,
     search_type,
     query,
-    version: passedVersion,
     limit: passedLimit,
   }): Promise<OutputSchema> => {
-    const limit = passedLimit > 0 ? passedLimit : 10;
+    const limit = passedLimit != null ? passedLimit : 10;
+    if (limit <= 0) {
+      throw new Error('Limit must be a positive integer.');
+    }
 
     if (!query.trim()) {
       throw new Error('Query must be a non-empty string.');
     }
 
-    const version =
-      passedVersion === 'latest' ? latest_pg_version : passedVersion;
+    const { base, versionSuffix } = parseDocsSourceParam(passedSource);
+    const version = versionForQueries(base, versionSuffix);
 
     if (search_type === 'semantic') {
       const { embedding } = await embed({
@@ -53,7 +81,7 @@ export const searchDocsFactory: ApiFactory<
       const embeddingJson = JSON.stringify(embedding);
       return {
         results: await semanticSearchBySource(
-          source,
+          base,
           pgPool,
           schema,
           embeddingJson,
@@ -66,7 +94,7 @@ export const searchDocsFactory: ApiFactory<
     if (search_type === 'keyword') {
       return {
         results: await keywordSearchBySource(
-          source,
+          base,
           pgPool,
           schema,
           query,
@@ -85,21 +113,14 @@ export const searchDocsFactory: ApiFactory<
       const candLimit = Math.max(limit * 4, 60);
       const [sem, kw] = await Promise.all([
         semanticSearchBySource(
-          source,
+          base,
           pgPool,
           schema,
           embeddingJson,
           version,
           candLimit,
         ),
-        keywordSearchBySource(
-          source,
-          pgPool,
-          schema,
-          query,
-          version,
-          candLimit,
-        ),
+        keywordSearchBySource(base, pgPool, schema, query, version, candLimit),
       ]);
       return { results: mergeRrf(sem, kw, limit) };
     }

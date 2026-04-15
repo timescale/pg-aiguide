@@ -4,13 +4,57 @@ export const pg_versions = ['14', '15', '16', '17', '18'] as const;
 export const latest_pg_version = pg_versions.at(
   -1,
 ) as (typeof pg_versions)[number];
-export const versions = [...pg_versions, 'latest'] as const;
+
+/** Logical source for routing queries (maps to table prefix via ENTITY_NAME_MAPPINGS). */
+export type DocsBaseSource = 'tiger' | 'postgres' | 'postgis';
+
+/**
+ * API `source` values: version is encoded in the suffix (e.g. postgres_17, postgis_3.4).
+ * Use postgres_latest for the newest bundled Postgres manual version.
+ */
+export const docsSourceEnumValues = [
+  'tiger',
+  'postgres_14',
+  'postgres_15',
+  'postgres_16',
+  'postgres_17',
+  'postgres_18',
+  'postgres_latest',
+  'postgis_3.3',
+  'postgis_3.4',
+  'postgis_3.5',
+  'postgis_3.6',
+] as const;
+
+export type DocsSourceParam = (typeof docsSourceEnumValues)[number];
+
+export function parseDocsSourceParam(passed: DocsSourceParam): {
+  base: DocsBaseSource;
+  versionSuffix: string | null;
+} {
+  if (passed === 'tiger') {
+    return { base: 'tiger', versionSuffix: null };
+  }
+  const i = passed.indexOf('_');
+  if (i <= 0) {
+    throw new Error('Invalid source');
+  }
+  const base = passed.slice(0, i) as DocsBaseSource;
+  const suffix = passed.slice(i + 1);
+  if (base !== 'postgres' && base !== 'postgis') {
+    throw new Error('Invalid source');
+  }
+  if (!suffix) {
+    throw new Error('Invalid source');
+  }
+  return { base, versionSuffix: suffix };
+}
 
 export const inputSchema = {
   source: z
-    .enum(['tiger', 'postgres', 'postgis'])
+    .enum(docsSourceEnumValues)
     .describe(
-      'The documentation source to search. "tiger" for Tiger Cloud and TimescaleDB, "postgres" for PostgreSQL, "postgis" for PostGIS spatial extension.',
+      'Documentation source with version in the suffix where applicable: tiger; postgres_14 … postgres_18 or postgres_latest; postgis_3.3 … postgis_3.6.',
     ),
   search_type: z
     .enum(['semantic', 'keyword', 'hybrid'])
@@ -22,16 +66,13 @@ export const inputSchema = {
     .describe(
       'The search query. For semantic search, use natural language. For keyword search, provide keywords.',
     ),
-  version: z
-    .enum(versions)
-    .nullable()
-    .describe(
-      'The PostgreSQL major version (ignored when searching "tiger"). Recommended to assume the latest version if unknown. Only applicable when source is Postgres. Defaults to latest version.',
-    ),
   limit: z.coerce
     .number()
     .int()
-    .describe('The maximum number of matches to return. Default is 10.'),
+    .nullable()
+    .describe(
+      'The maximum number of matches to return. If omitted, defaults to 10.',
+    ),
 } as const;
 
 export const zBaseResult = z.object({
@@ -75,7 +116,6 @@ export type SemanticResult = z.infer<typeof zSemanticResult>;
 export type KeywordResult = z.infer<typeof zKeywordResult>;
 export type HybridResult = z.infer<typeof zHybridResult>;
 export type BaseResult = z.infer<typeof zBaseResult>;
-export type DocsSource = z.infer<(typeof inputSchema)['source']>;
 
 export const outputSchema = {
   results: z.array(z.union([zSemanticResult, zKeywordResult, zHybridResult])),
