@@ -1,6 +1,6 @@
 import { createViewSkillToolFactory } from '@tigerdata/mcp-boilerplate/skills';
 import { parseFeatureFlags } from '../util/featureFlags.js';
-import { searchDocsFactory } from './searchDocs.js';
+import { searchDocsFactory } from './searchDocs/index.js';
 
 export const apiFactories = [
   searchDocsFactory,
