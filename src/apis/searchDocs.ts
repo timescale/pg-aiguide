@@ -1,16 +1,20 @@
 import { openai } from '@ai-sdk/openai';
 import type { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
 import { embed } from 'ai';
+import type { Pool } from 'pg';
 import { z } from 'zod';
 import type { ServerContext } from '../types.js';
+
+// --- constants & source routing
 
 type SourceType = 'tiger' | 'postgres' | 'postgis';
 const ENTITY_NAME_MAPPINGS: Partial<Record<SourceType, string>> = {
   tiger: 'timescale',
 };
 
-/** RRF rank constant (standard default). */
 const RRF_K = 60;
+
+// --- Zod: request / response (MCP + HTTP)
 
 const inputSchema = {
   source: z
@@ -32,7 +36,7 @@ const inputSchema = {
   search_type: z
     .enum(['semantic', 'keyword', 'hybrid'])
     .describe(
-      'The type of search to perform. "semantic" uses natural language vector similarity, "keyword" uses BM25 keyword matching, "hybrid" combines both with reciprocal rank fusion (RRF).',
+      'The type of search to perform. "semantic" uses natural language vector similarity, "keyword" uses BM25 keyword matching, "hybrid" runs both and fuses rankings with RRF.',
     ),
   query: z
     .string()
@@ -95,6 +99,185 @@ const outputSchema = {
 
 type OutputSchema = InferSchema<typeof outputSchema>;
 
+// --- DB + RRF primitives
+
+type SearchDocsCtx = {
+  pool: Pool;
+  schema: string;
+  entityPrefix: string;
+  version?: string;
+};
+
+/** RRF from two ordered id lists (rank 1 = index 0). */
+function rrfScores(
+  semanticIds: number[],
+  keywordIds: number[],
+): Map<number, number> {
+  const scores = new Map<number, number>();
+  const add = (ids: number[]) => {
+    ids.forEach((id, i) => {
+      const r = i + 1;
+      scores.set(id, (scores.get(id) ?? 0) + 1 / (RRF_K + r));
+    });
+  };
+  add(semanticIds);
+  add(keywordIds);
+  return scores;
+}
+
+async function searchDocsQuery(
+  pool: Pool,
+  schema: string,
+  entityPrefix: string,
+  semantic: boolean,
+  searchParam: string,
+  limit: number,
+  version?: string,
+): Promise<Record<string, unknown>[]> {
+  const bm25Idx = `${schema}.${entityPrefix}_chunks_content_idx`;
+  const sql = /* sql */ `
+        SELECT
+          c.id::int,
+          c.content,
+          c.metadata::text,
+          ${
+            semantic
+              ? `c.embedding <=> $1::vector(1536) AS distance`
+              : `  -(c.content <@> to_bm25query($1, '${bm25Idx}')) as score`
+          }
+        FROM ${schema}.${entityPrefix}_chunks c
+        ${
+          version
+            ? `JOIN ${schema}.${entityPrefix}_pages p ON c.page_id = p.id
+        WHERE p.version = $2`
+            : ``
+        }
+        ORDER BY ${
+          semantic ? 'distance' : `c.content <@> to_bm25query($1, '${bm25Idx}')`
+        }
+        LIMIT $${version ? '3' : '2'}
+        `;
+
+  const result = await pool.query(sql, [
+    searchParam,
+    ...(version ? [version] : []),
+    limit,
+  ]);
+  return result.rows;
+}
+
+async function embeddingJsonForQuery(query: string): Promise<string> {
+  const { embedding } = await embed({
+    model: openai.embedding('text-embedding-3-small'),
+    value: query,
+  });
+  return JSON.stringify(embedding);
+}
+
+// --- One explicit implementation per search_type
+
+/** Vector similarity only; returns rows with `distance`. */
+async function runSemanticDocsSearch(
+  ctx: SearchDocsCtx,
+  query: string,
+  limit: number,
+): Promise<SemanticResult[]> {
+  const embeddingJson = await embeddingJsonForQuery(query);
+  const rows = await searchDocsQuery(
+    ctx.pool,
+    ctx.schema,
+    ctx.entityPrefix,
+    true,
+    embeddingJson,
+    limit,
+    ctx.version,
+  );
+  return rows as SemanticResult[];
+}
+
+/** BM25 / keyword index only; returns rows with `score`. */
+async function runKeywordDocsSearch(
+  ctx: SearchDocsCtx,
+  query: string,
+  limit: number,
+): Promise<KeywordResult[]> {
+  const rows = await searchDocsQuery(
+    ctx.pool,
+    ctx.schema,
+    ctx.entityPrefix,
+    false,
+    query,
+    limit,
+    ctx.version,
+  );
+  return rows as KeywordResult[];
+}
+
+/**
+ * Parallel semantic + keyword top-k, RRF fusion in app code, then load chunk
+ * text for the fused id list. Returns rows with `rrf_score` only (no distance/score).
+ */
+async function runHybridDocsSearch(
+  ctx: SearchDocsCtx,
+  query: string,
+  limit: number,
+): Promise<HybridResult[]> {
+  const embeddingJson = await embeddingJsonForQuery(query);
+  const candidateLimit = Math.min(150, Math.max(limit * 4, 40));
+
+  const [semanticRows, keywordRows] = await Promise.all([
+    searchDocsQuery(
+      ctx.pool,
+      ctx.schema,
+      ctx.entityPrefix,
+      true,
+      embeddingJson,
+      candidateLimit,
+      ctx.version,
+    ),
+    searchDocsQuery(
+      ctx.pool,
+      ctx.schema,
+      ctx.entityPrefix,
+      false,
+      query,
+      candidateLimit,
+      ctx.version,
+    ),
+  ]);
+
+  const scores = rrfScores(
+    semanticRows.map((r) => r.id as number),
+    keywordRows.map((r) => r.id as number),
+  );
+  const top = [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id, rrf_score]) => ({ id, rrf_score }));
+
+  const { rows: chunks } = await ctx.pool.query<{
+    id: number;
+    content: string;
+    metadata: string;
+  }>(
+    /* sql */ `
+        SELECT id::int, content, metadata::text
+        FROM ${ctx.schema}.${ctx.entityPrefix}_chunks
+        WHERE id = ANY($1::int[])
+        `,
+    [top.map((t) => t.id)],
+  );
+  const byId = new Map(chunks.map((c) => [c.id, c]));
+
+  return top.map(({ id, rrf_score }) => {
+    const row = byId.get(id);
+    if (!row) throw new Error(`Missing chunk row for id ${id}`);
+    return { ...row, rrf_score };
+  });
+}
+
+// --- API factory
+
 export const searchDocsFactory: ApiFactory<
   ServerContext,
   typeof inputSchema,
@@ -133,116 +316,29 @@ export const searchDocsFactory: ApiFactory<
 
     if (!source) throw new Error('Invalid source');
 
-    const prefix = ENTITY_NAME_MAPPINGS[source as SourceType] ?? source;
-    const chunks = `${schema}.${prefix}_chunks`;
-    const pages = `${schema}.${prefix}_pages`;
-    const bm25Idx = `${schema}.${prefix}_chunks_content_idx`;
-    const bm25 = (param: string) =>
-      `c.content <@> to_bm25query(${param}, '${bm25Idx}')`;
+    const entityPrefix = ENTITY_NAME_MAPPINGS[source as SourceType] ?? source;
+    const ctx: SearchDocsCtx = {
+      pool: pgPool,
+      schema,
+      entityPrefix,
+      version: version || undefined,
+    };
 
-    const isSemantic = search_type === 'semantic';
-    const isHybrid = search_type === 'hybrid';
+    switch (search_type) {
+      case 'semantic':
+        return { results: await runSemanticDocsSearch(ctx, query, limit) };
 
-    const embeddingJson =
-      isSemantic || isHybrid
-        ? JSON.stringify(
-            (
-              await embed({
-                model: openai.embedding('text-embedding-3-small'),
-                value: query,
-              })
-            ).embedding,
-          )
-        : null;
+      case 'keyword':
+        return { results: await runKeywordDocsSearch(ctx, query, limit) };
 
-    if (isHybrid) {
-      const candidateLimit = Math.min(150, Math.max(limit * 4, 40));
-      const vj = version
-        ? `
-        JOIN ${pages} p ON c.page_id = p.id
-        WHERE p.version = $3`
-        : '';
-      const limCand = version ? '$4' : '$3';
-      const limFinal = version ? '$5' : '$4';
+      case 'hybrid':
+        return { results: await runHybridDocsSearch(ctx, query, limit) };
 
-      const sql = /* sql */ `
-        WITH semantic_candidates AS (
-          SELECT id, ROW_NUMBER() OVER (ORDER BY dist) AS sem_rank
-          FROM (
-            SELECT c.id, (c.embedding <=> $1::vector(1536)) AS dist
-            FROM ${chunks} c
-            ${vj}
-            ORDER BY dist
-            LIMIT ${limCand}
-          ) s
-        ),
-        keyword_candidates AS (
-          SELECT id, ROW_NUMBER() OVER (ORDER BY bm25_dist) AS kw_rank
-          FROM (
-            SELECT c.id, (${bm25('$2')}) AS bm25_dist
-            FROM ${chunks} c
-            ${vj}
-            ORDER BY bm25_dist
-            LIMIT ${limCand}
-          ) k
-        ),
-        rrf_scores AS (
-          SELECT
-            COALESCE(s.id, k.id) AS id,
-            COALESCE(1.0 / (${RRF_K} + s.sem_rank), 0)
-              + COALESCE(1.0 / (${RRF_K} + k.kw_rank), 0) AS rrf_score
-          FROM semantic_candidates s
-          FULL OUTER JOIN keyword_candidates k ON s.id = k.id
-        )
-        SELECT c.id::int, c.content, c.metadata::text, r.rrf_score
-        FROM rrf_scores r
-        JOIN ${chunks} c ON c.id = r.id
-        ORDER BY r.rrf_score DESC
-        LIMIT ${limFinal}
-        `;
-
-      const params = version
-        ? [embeddingJson, query, version, candidateLimit, limit]
-        : [embeddingJson, query, candidateLimit, limit];
-
-      const result = await pgPool.query<HybridResult>(sql, params);
-      return { results: result.rows };
+      default: {
+        const _exhaustive: never = search_type;
+        throw new Error(`Unhandled search_type: ${_exhaustive}`);
+      }
     }
-
-    if (isSemantic && embeddingJson === null) {
-      throw new Error('Expected embedding for semantic search.');
-    }
-    const searchParam = isSemantic ? embeddingJson : query;
-
-    const vj = version
-      ? `
-        JOIN ${pages} p ON c.page_id = p.id
-        WHERE p.version = $2`
-      : '';
-    const lim = version ? '$3' : '$2';
-
-    const sql = /* sql */ `
-        SELECT
-          c.id::int,
-          c.content,
-          c.metadata::text,
-          ${
-            isSemantic
-              ? `c.embedding <=> $1::vector(1536) AS distance`
-              : `  -(${bm25('$1')}) AS score`
-          }
-        FROM ${chunks} c
-        ${vj}
-        ORDER BY ${isSemantic ? 'distance' : bm25('$1')}
-        LIMIT ${lim}
-        `;
-
-    const params = [searchParam, ...(version ? [version] : []), limit];
-    const result = await pgPool.query<SemanticResult | KeywordResult>(
-      sql,
-      params,
-    );
-    return { results: result.rows };
   },
   pickResult: (r) => r.results,
 });
