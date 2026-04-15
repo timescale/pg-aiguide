@@ -14,11 +14,10 @@ Unified search tool for querying documentation using semantic (vector similarity
 
 ```jsonc
 {
-  "source": "postgres", // required: "postgres", "tiger", or "postgis"
+  "source": "postgres_17", // required: tiger, postgres_14 … postgres_18 or postgres_latest, postgis_3.3 … postgis_3.6
   "search_type": "semantic", // required: "semantic", "keyword", or "hybrid"
   "query": "How do I create an index?", // required: search query
-  "version": "17", // required: PostgreSQL version ("14"-"18" or "latest"), ignored for tiger/postgis
-  "limit": 10 // required: maximum results to return
+  "limit": 10 // optional: maximum results (default 10; must be positive if set)
 }
 ```
 
