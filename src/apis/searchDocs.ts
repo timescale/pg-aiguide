@@ -214,8 +214,8 @@ async function runKeywordDocsSearch(
 }
 
 /**
- * Parallel semantic + keyword top-k, RRF fusion in app code, then load chunk
- * text for the fused id list. Returns rows with `rrf_score` only (no distance/score).
+ * Parallel semantic + keyword top-k, RRF fusion in app code. Chunk text is
+ * reused from those two result sets.
  */
 async function runHybridDocsSearch(
   ctx: SearchDocsCtx,
@@ -255,24 +255,28 @@ async function runHybridDocsSearch(
     .slice(0, limit)
     .map(([id, rrf_score]) => ({ id, rrf_score }));
 
-  const { rows: chunks } = await ctx.pool.query<{
-    id: number;
-    content: string;
-    metadata: string;
-  }>(
-    /* sql */ `
-        SELECT id::int, content, metadata::text
-        FROM ${ctx.schema}.${ctx.entityPrefix}_chunks
-        WHERE id = ANY($1::int[])
-        `,
-    [top.map((t) => t.id)],
-  );
-  const byId = new Map(chunks.map((c) => [c.id, c]));
+  const byId = new Map<number, { content: string; metadata: string }>();
+  for (const r of semanticRows) {
+    const id = r.id as number;
+    byId.set(id, {
+      content: r.content as string,
+      metadata: r.metadata as string,
+    });
+  }
+  for (const r of keywordRows) {
+    const id = r.id as number;
+    if (!byId.has(id)) {
+      byId.set(id, {
+        content: r.content as string,
+        metadata: r.metadata as string,
+      });
+    }
+  }
 
   return top.map(({ id, rrf_score }) => {
     const row = byId.get(id);
     if (!row) throw new Error(`Missing chunk row for id ${id}`);
-    return { ...row, rrf_score };
+    return { id, content: row.content, metadata: row.metadata, rrf_score };
   });
 }
 

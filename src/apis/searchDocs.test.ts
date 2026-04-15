@@ -112,18 +112,8 @@ describe('search_docs — semantic', () => {
 describe('search_docs — hybrid', () => {
   test('runs vector + BM25 queries then merges with RRF', async () => {
     let queries = 0;
-    const pool = poolMock((sql, params) => {
+    const pool = poolMock((sql) => {
       queries += 1;
-      if (/WHERE id = ANY/i.test(sql)) {
-        const ids = params[0] as number[];
-        return {
-          rows: ids.map((id) => ({
-            id,
-            content: `c${id}`,
-            metadata: '{}',
-          })),
-        };
-      }
       if (sql.includes('<=>')) {
         return {
           rows: [{ id: 100, content: 'a', metadata: '{}', distance: 0.1 }],
@@ -141,7 +131,7 @@ describe('search_docs — hybrid', () => {
       limit: 5,
     })) as { results: { id: number; rrf_score: number }[] };
 
-    expect(queries).toBe(3);
+    expect(queries).toBe(2);
     expect(out.results).toHaveLength(2);
     expect(out.results.every((r) => 'rrf_score' in r)).toBe(true);
   });
