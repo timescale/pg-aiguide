@@ -1,5 +1,9 @@
 import { openai } from '@ai-sdk/openai';
-import type { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
+import type {
+  ApiFactory,
+  InferSchema,
+  McpFeatureFlags,
+} from '@tigerdata/mcp-boilerplate';
 import { embed } from 'ai';
 import type { z } from 'zod';
 import type { ServerContext } from '../../types.js';
@@ -14,7 +18,7 @@ export const searchDocsFactory: ApiFactory<
   typeof inputSchema,
   typeof outputSchema,
   z.infer<(typeof outputSchema)['results']>
-> = ({ pgPool, schema }) => ({
+> = ({ pgPool, schema }, _featureFlags: McpFeatureFlags) => ({
   name: 'search_docs',
   method: 'get',
   route: '/search-docs',

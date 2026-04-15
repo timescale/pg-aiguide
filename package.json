@@ -26,6 +26,7 @@
     "migrate": "migrate",
     "prepublishOnly": "./bun run build",
     "start": "./bun src/index.ts",
+    "test": "./bun test",
     "typecheck": "tsc --noEmit",
     "watch": "./bun --watch src/index.ts"
   },

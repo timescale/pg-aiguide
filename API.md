@@ -6,7 +6,7 @@ All methods are exposed as MCP tools.
 
 ### `search_docs`
 
-Unified search tool for querying documentation using semantic (vector similarity) or keyword (BM25) search.
+Unified search tool for querying documentation using semantic (vector similarity), keyword (BM25), or hybrid search (both combined with reciprocal rank fusion).
 
 **MCP Tool**: `search_docs`
 
@@ -15,7 +15,7 @@ Unified search tool for querying documentation using semantic (vector similarity
 ```jsonc
 {
   "source": "postgres", // required: "postgres", "tiger", or "postgis"
-  "search_type": "semantic", // required: "semantic" or "keyword"
+  "search_type": "semantic", // required: "semantic", "keyword", or "hybrid"
   "query": "How do I create an index?", // required: search query
   "version": "17", // required: PostgreSQL version ("14"-"18" or "latest"), ignored for tiger/postgis
   "limit": 10 // required: maximum results to return
@@ -47,6 +47,23 @@ Unified search tool for querying documentation using semantic (vector similarity
       "content": "CREATE INDEX ...",
       "metadata": "{...}", // JSON-encoded metadata
       "score": 12.5 // higher = more relevant
+    }
+  ]
+}
+```
+
+#### Output (Hybrid Search)
+
+Hybrid results combine semantic and keyword rankings; each row includes `rrf_score` instead of `distance` or `score`.
+
+```jsonc
+{
+  "results": [
+    {
+      "id": 11716,
+      "content": "CREATE INDEX ...",
+      "metadata": "{...}", // JSON-encoded metadata
+      "rrf_score": 0.0328 // higher = more relevant (RRF fusion)
     }
   ]
 }
