@@ -7,7 +7,7 @@ import {
   DocChunkSearch,
   type DocChunkSearchContext,
 } from './docChunkSearch.js';
-import { DEFAULT_RRF_K, RrfFusion, type RrfWeights } from './rrf.js';
+import { DEFAULT_RRF_K, rrfRankedTop } from './rrf.js';
 
 const HYBRID_CANDIDATE_LIMIT = 50;
 
@@ -142,7 +142,7 @@ async function embeddingJsonForQuery(query: string): Promise<string> {
   return JSON.stringify(embedding);
 }
 
-// --- `search_docs` ApiFactory (orchestrates DocChunkSearch + RrfFusion)
+// --- `search_docs` ApiFactory (orchestrates DocChunkSearch + RRF)
 
 export const searchDocsFactory: ApiFactory<
   ServerContext,
@@ -210,11 +210,10 @@ export const searchDocsFactory: ApiFactory<
 
       case 'hybrid': {
         const embeddingJson = await embeddingJsonForQuery(query);
-        const rrfWeights: RrfWeights = {
-          keywordWeight: passedKeywordWeight != null ? passedKeywordWeight : 1,
-          semanticWeight:
-            passedSemanticWeight != null ? passedSemanticWeight : 1,
-        };
+        const semanticWeight =
+          passedSemanticWeight != null ? passedSemanticWeight : 1;
+        const keywordWeight =
+          passedKeywordWeight != null ? passedKeywordWeight : 1;
         const rrfK = passedRrfK != null ? passedRrfK : DEFAULT_RRF_K;
 
         const chunkSearch = new DocChunkSearch(ctx);
@@ -223,9 +222,12 @@ export const searchDocsFactory: ApiFactory<
           chunkSearch.searchKeyword(query, HYBRID_CANDIDATE_LIMIT),
         ]);
 
-        const top = new RrfFusion(rrfK, rrfWeights).rankedTop(
+        const top = rrfRankedTop(
           semanticRows.map((r) => r.id),
           keywordRows.map((r) => r.id),
+          rrfK,
+          semanticWeight,
+          keywordWeight,
           limit,
         );
 

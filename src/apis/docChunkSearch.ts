@@ -41,10 +41,7 @@ export class DocChunkSearch {
   }
 
   /** BM25 keyword search; `query` is passed to `to_bm25query` with the content index. */
-  searchKeyword(
-    query: string,
-    limit: number,
-  ): Promise<DocChunkKeywordRow[]> {
+  searchKeyword(query: string, limit: number): Promise<DocChunkKeywordRow[]> {
     return this.runSearch(false, query, limit) as Promise<DocChunkKeywordRow[]>;
   }
 
@@ -74,9 +71,7 @@ export class DocChunkSearch {
             : ``
         }
         ORDER BY ${
-          semantic
-            ? 'distance'
-            : `c.content <@> to_bm25query($1, '${bm25Idx}')`
+          semantic ? 'distance' : `c.content <@> to_bm25query($1, '${bm25Idx}')`
         }
         LIMIT $${version ? '3' : '2'}
         `;

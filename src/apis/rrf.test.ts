@@ -1,57 +1,36 @@
 import { describe, expect, test } from 'bun:test';
-import { DEFAULT_RRF_K, RrfFusion } from './rrf.js';
+import { DEFAULT_RRF_K, rrfRankedTop } from './rrf.js';
 
-describe('RrfFusion', () => {
+describe('RRF', () => {
   test('DEFAULT_RRF_K is 60', () => {
     expect(DEFAULT_RRF_K).toBe(60);
   });
 
-  test('rankedTop prefers id that appears high in both lists', () => {
-    const fusion = new RrfFusion(60, {
-      keywordWeight: 1,
-      semanticWeight: 1,
-    });
-    // id 1 only in semantic rank 1; id 2 keyword rank 1 only. id 1 also keyword rank 2.
-    const top = fusion.rankedTop([1], [2, 1], 10);
+  test('rrfRankedTop prefers id that appears high in both lists', () => {
+    const top = rrfRankedTop([1], [2, 1], 60, 1, 1, 10);
     expect(top.map((t) => t.id)).toEqual([1, 2]);
   });
 
   test('zero keyword weight ignores keyword ordering', () => {
-    const onlySemantic = new RrfFusion(60, {
-      keywordWeight: 0,
-      semanticWeight: 1,
-    });
-    const top = onlySemantic.rankedTop([9, 8], [8, 9], 2);
+    const top = rrfRankedTop([9, 8], [8, 9], 60, 1, 0, 2);
     expect(top.map((t) => t.id)).toEqual([9, 8]);
   });
 
   test('zero semantic weight ignores semantic ordering', () => {
-    const onlyKeyword = new RrfFusion(60, {
-      keywordWeight: 1,
-      semanticWeight: 0,
-    });
-    const top = onlyKeyword.rankedTop([9, 8], [8, 9], 2);
+    const top = rrfRankedTop([9, 8], [8, 9], 60, 0, 1, 2);
     expect(top.map((t) => t.id)).toEqual([8, 9]);
   });
 
-  test('topIds sorts by score descending', () => {
-    const m = new Map<number, number>([
-      [1, 0.01],
-      [2, 0.05],
-      [3, 0.02],
-    ]);
-    const top = RrfFusion.topIds(m, 2);
-    expect(top.map((t) => t.id)).toEqual([2, 3]);
-    expect(top[0]?.rrf_score).toBe(0.05);
+  test('rrfRankedTop orders by fused score descending', () => {
+    const top = rrfRankedTop([1, 2, 3], [], 60, 1, 0, 3);
+    expect(top.map((t) => t.id)).toEqual([1, 2, 3]);
+    expect(top[0]?.rrf_score).toBeGreaterThan(top[1]?.rrf_score ?? 0);
+    expect(top[1]?.rrf_score).toBeGreaterThan(top[2]?.rrf_score ?? 0);
   });
 
-  test('fuse sums contributions for id in both lists', () => {
-    const fusion = new RrfFusion(60, {
-      keywordWeight: 1,
-      semanticWeight: 1,
-    });
-    const scores = fusion.fuse([5], [5]);
-    // rank 1 in each: 1/61 + 1/61
-    expect(scores.get(5)).toBeCloseTo(2 / 61, 10);
+  test('rrfRankedTop exposes fused score for id in both lists', () => {
+    const top = rrfRankedTop([5], [5], 60, 1, 1, 10);
+    const row = top.find((t) => t.id === 5);
+    expect(row?.rrf_score).toBeCloseTo(2 / 61, 10);
   });
 });
