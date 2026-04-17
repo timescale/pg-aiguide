@@ -17,18 +17,16 @@ export function rrfRankedTop(
   const scores = new Map<number, number>();
 
   // Semantic list
-  for (let i = 0; i < semanticIds.length; i++) {
-    const id = semanticIds[i]!;
+  semanticIds.forEach((id, i) => {
     const r = i + 1;
     scores.set(id, (scores.get(id) ?? 0) + semanticWeight / (k + r));
-  }
+  });
 
   // Keyword list
-  for (let i = 0; i < keywordIds.length; i++) {
-    const id = keywordIds[i]!;
+  keywordIds.forEach((id, i) => {
     const r = i + 1;
     scores.set(id, (scores.get(id) ?? 0) + keywordWeight / (k + r));
-  }
+  });
 
   // Sort by fused score descending, keep top `limit`, expose scores as rrf_score
   return [...scores.entries()]
