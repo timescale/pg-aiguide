@@ -58,6 +58,18 @@ describe('search_docs — validation', () => {
       }),
     ).rejects.toThrow('Query must be a non-empty string.');
   });
+
+  test('rejects invalid source (empty before first underscore)', async () => {
+    const pool = poolMock(() => ({ rows: [] }));
+    await expect(
+      invoke(pool, {
+        source: '_postgres',
+        search_type: 'keyword',
+        query: 'x',
+        limit: 1,
+      }),
+    ).rejects.toThrow('Invalid source');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -79,6 +91,38 @@ describe('search_docs — keyword', () => {
     expect(out.results).toEqual([
       { id: 1, content: 'x', metadata: '{}', score: 1.5 },
     ]);
+  });
+
+  test('maps tiger source to timescale chunk table in SQL', async () => {
+    let lastSql = '';
+    const pool = poolMock((sql) => {
+      lastSql = sql;
+      return { rows: [] };
+    });
+    await invoke(pool, {
+      source: 'tiger',
+      search_type: 'keyword',
+      query: 'hello',
+      limit: 10,
+    });
+    expect(lastSql).toContain('doc.timescale_chunks');
+  });
+
+  test('passes version bind for versioned postgres source', async () => {
+    let lastParams: unknown[] = [];
+    const pool = poolMock((_sql, params) => {
+      lastParams = params;
+      return { rows: [] };
+    });
+    await invoke(pool, {
+      source: 'postgres_16',
+      search_type: 'keyword',
+      query: 'wal',
+      limit: 3,
+    });
+    expect(lastParams[0]).toBe('wal');
+    expect(lastParams[1]).toBe('16');
+    expect(lastParams[2]).toBe(3);
   });
 });
 
@@ -120,7 +164,10 @@ describe('search_docs — hybrid', () => {
         };
       }
       return {
-        rows: [{ id: 200, content: 'b', metadata: '{}', score: 1.0 }],
+        rows: [
+          { id: 200, content: 'b', metadata: '{}', score: 1.0 },
+          { id: 100, content: 'a', metadata: '{}', score: 0.9 },
+        ],
       };
     });
 
@@ -133,6 +180,10 @@ describe('search_docs — hybrid', () => {
 
     expect(queries).toBe(2);
     expect(out.results).toHaveLength(2);
-    expect(out.results.every((r) => 'rrf_score' in r)).toBe(true);
+    expect(out.results.map((r) => r.id)).toEqual([100, 200]);
+    // RRF k=60, equal weights: id 100 is rank 1 semantic + rank 2 keyword; id 200 rank 1 keyword only
+    const expected100 = 1 / (60 + 1) + 1 / (60 + 2);
+    expect(out.results[0]?.rrf_score).toBeCloseTo(expected100, 10);
+    expect(out.results[1]?.rrf_score).toBeCloseTo(1 / (60 + 1), 10);
   });
 });

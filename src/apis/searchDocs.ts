@@ -1,20 +1,24 @@
 import { openai } from '@ai-sdk/openai';
 import type { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
 import { embed } from 'ai';
-import type { Pool } from 'pg';
 import { z } from 'zod';
 import type { ServerContext } from '../types.js';
+import {
+  DocChunkSearch,
+  type DocChunkSearchContext,
+} from './docChunkSearch.js';
+import { DEFAULT_RRF_K, RrfFusion, type RrfWeights } from './rrf.js';
 
-// --- constants & source routing
+const HYBRID_CANDIDATE_LIMIT = 50;
+
+// --- Source routing (MCP `source` → DB `{entityPrefix}_*` tables)
 
 type SourceType = 'tiger' | 'postgres' | 'postgis';
 const ENTITY_NAME_MAPPINGS: Partial<Record<SourceType, string>> = {
   tiger: 'timescale',
 };
 
-const RRF_K = 60;
-
-// --- Zod: request / response (MCP + HTTP)
+// --- Zod: MCP tool input (`search_docs` parameters)
 
 const inputSchema = {
   source: z
@@ -50,7 +54,36 @@ const inputSchema = {
     .describe(
       'The maximum number of matches to return. If not provided, default is 10.',
     ),
+  keyword_weight: z.coerce
+    .number()
+    .finite()
+    .nonnegative()
+    .nullable()
+    .optional()
+    .describe(
+      'Hybrid only: multiplier for BM25 ranks in RRF (default 1.0). Higher favors keyword matches.',
+    ),
+  semantic_weight: z.coerce
+    .number()
+    .finite()
+    .nonnegative()
+    .nullable()
+    .optional()
+    .describe(
+      'Hybrid only: multiplier for vector ranks in RRF (default 1.0). Higher favors semantic matches.',
+    ),
+  rrf_k: z.coerce
+    .number()
+    .finite()
+    .positive()
+    .nullable()
+    .optional()
+    .describe(
+      'Hybrid only: RRF smoothing constant k in weight/(k+rank) (default 60). Higher smooths rank differences.',
+    ),
 } as const;
+
+// --- Zod: MCP tool output (`results[]`; shape depends on `search_type`)
 
 const zBaseResult = z.object({
   id: z
@@ -99,72 +132,7 @@ const outputSchema = {
 
 type OutputSchema = InferSchema<typeof outputSchema>;
 
-// --- DB + RRF primitives
-
-type SearchDocsCtx = {
-  pool: Pool;
-  schema: string;
-  entityPrefix: string;
-  version?: string;
-};
-
-/** RRF from two ordered id lists (rank 1 = index 0). */
-function rrfScores(
-  semanticIds: number[],
-  keywordIds: number[],
-): Map<number, number> {
-  const scores = new Map<number, number>();
-  const add = (ids: number[]) => {
-    ids.forEach((id, i) => {
-      const r = i + 1;
-      scores.set(id, (scores.get(id) ?? 0) + 1 / (RRF_K + r));
-    });
-  };
-  add(semanticIds);
-  add(keywordIds);
-  return scores;
-}
-
-async function searchDocsQuery(
-  pool: Pool,
-  schema: string,
-  entityPrefix: string,
-  semantic: boolean,
-  searchParam: string,
-  limit: number,
-  version?: string,
-): Promise<Record<string, unknown>[]> {
-  const bm25Idx = `${schema}.${entityPrefix}_chunks_content_idx`;
-  const sql = /* sql */ `
-        SELECT
-          c.id::int,
-          c.content,
-          c.metadata::text,
-          ${
-            semantic
-              ? `c.embedding <=> $1::vector(1536) AS distance`
-              : `  -(c.content <@> to_bm25query($1, '${bm25Idx}')) as score`
-          }
-        FROM ${schema}.${entityPrefix}_chunks c
-        ${
-          version
-            ? `JOIN ${schema}.${entityPrefix}_pages p ON c.page_id = p.id
-        WHERE p.version = $2`
-            : ``
-        }
-        ORDER BY ${
-          semantic ? 'distance' : `c.content <@> to_bm25query($1, '${bm25Idx}')`
-        }
-        LIMIT $${version ? '3' : '2'}
-        `;
-
-  const result = await pool.query(sql, [
-    searchParam,
-    ...(version ? [version] : []),
-    limit,
-  ]);
-  return result.rows;
-}
+// --- OpenAI query embedding (semantic + hybrid only; chunk search lives in DocChunkSearch)
 
 async function embeddingJsonForQuery(query: string): Promise<string> {
   const { embedding } = await embed({
@@ -174,97 +142,7 @@ async function embeddingJsonForQuery(query: string): Promise<string> {
   return JSON.stringify(embedding);
 }
 
-// --- One explicit implementation per search_type
-
-/** Vector similarity only; returns rows with `distance`. Caller supplies `embeddingJson`. */
-async function runSemanticDocsSearch(
-  ctx: SearchDocsCtx,
-  embeddingJson: string,
-  limit: number,
-): Promise<SemanticResult[]> {
-  const rows = await searchDocsQuery(
-    ctx.pool,
-    ctx.schema,
-    ctx.entityPrefix,
-    true,
-    embeddingJson,
-    limit,
-    ctx.version,
-  );
-  return rows as SemanticResult[];
-}
-
-/** BM25 / keyword index only; returns rows with `score`. */
-async function runKeywordDocsSearch(
-  ctx: SearchDocsCtx,
-  query: string,
-  limit: number,
-): Promise<KeywordResult[]> {
-  const rows = await searchDocsQuery(
-    ctx.pool,
-    ctx.schema,
-    ctx.entityPrefix,
-    false,
-    query,
-    limit,
-    ctx.version,
-  );
-  return rows as KeywordResult[];
-}
-
-/**
- * Parallel semantic + keyword top-k, RRF fusion in app code. Chunk text is
- * reused from those two result sets.
- */
-async function runHybridDocsSearch(
-  ctx: SearchDocsCtx,
-  query: string,
-  limit: number,
-  embeddingJson: string,
-): Promise<HybridResult[]> {
-  const candidateLimit = Math.min(150, Math.max(limit * 4, 40));
-
-  const [semanticRows, keywordRows] = await Promise.all([
-    runSemanticDocsSearch(ctx, embeddingJson, candidateLimit),
-    runKeywordDocsSearch(ctx, query, candidateLimit),
-  ]);
-
-  const scores = rrfScores(
-    semanticRows.map((r) => r.id as number),
-    keywordRows.map((r) => r.id as number),
-  );
-  const top = [...scores.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([id, rrf_score]) => ({ id, rrf_score }));
-
-  const byId = new Map<number, { content: string; metadata: string }>();
-  for (const r of semanticRows) {
-    const id = r.id as number;
-    byId.set(id, {
-      content: r.content as string,
-      metadata: r.metadata as string,
-    });
-  }
-  for (const r of keywordRows) {
-    const id = r.id as number;
-    if (!byId.has(id)) {
-      byId.set(id, {
-        content: r.content as string,
-        metadata: r.metadata as string,
-      });
-    }
-  }
-
-  const rows = top.map(({ id, rrf_score }) => {
-    const row = byId.get(id);
-    if (!row) throw new Error(`Missing chunk row for id ${id}`);
-    return { id, content: row.content, metadata: row.metadata, rrf_score };
-  });
-  return rows as HybridResult[];
-}
-
-// --- API factory
+// --- `search_docs` ApiFactory (orchestrates DocChunkSearch + RrfFusion)
 
 export const searchDocsFactory: ApiFactory<
   ServerContext,
@@ -291,6 +169,9 @@ export const searchDocsFactory: ApiFactory<
     search_type,
     query,
     limit: passedLimit,
+    keyword_weight: passedKeywordWeight,
+    semantic_weight: passedSemanticWeight,
+    rrf_k: passedRrfK,
   }): Promise<OutputSchema> => {
     const limit = passedLimit != null ? passedLimit : 10;
     if (limit <= 0) {
@@ -305,7 +186,7 @@ export const searchDocsFactory: ApiFactory<
     if (!source) throw new Error('Invalid source');
 
     const entityPrefix = ENTITY_NAME_MAPPINGS[source as SourceType] ?? source;
-    const ctx: SearchDocsCtx = {
+    const ctx: DocChunkSearchContext = {
       pool: pgPool,
       schema,
       entityPrefix,
@@ -315,19 +196,59 @@ export const searchDocsFactory: ApiFactory<
     switch (search_type) {
       case 'semantic': {
         const embeddingJson = await embeddingJsonForQuery(query);
-        return {
-          results: await runSemanticDocsSearch(ctx, embeddingJson, limit),
-        };
+        const rows = await new DocChunkSearch(ctx).searchSemantic(
+          embeddingJson,
+          limit,
+        );
+        return { results: rows as SemanticResult[] };
       }
 
-      case 'keyword':
-        return { results: await runKeywordDocsSearch(ctx, query, limit) };
+      case 'keyword': {
+        const rows = await new DocChunkSearch(ctx).searchKeyword(query, limit);
+        return { results: rows as KeywordResult[] };
+      }
 
       case 'hybrid': {
         const embeddingJson = await embeddingJsonForQuery(query);
-        return {
-          results: await runHybridDocsSearch(ctx, query, limit, embeddingJson),
+        const rrfWeights: RrfWeights = {
+          keywordWeight: passedKeywordWeight != null ? passedKeywordWeight : 1,
+          semanticWeight:
+            passedSemanticWeight != null ? passedSemanticWeight : 1,
         };
+        const rrfK = passedRrfK != null ? passedRrfK : DEFAULT_RRF_K;
+
+        const chunkSearch = new DocChunkSearch(ctx);
+        const [semanticRows, keywordRows] = await Promise.all([
+          chunkSearch.searchSemantic(embeddingJson, HYBRID_CANDIDATE_LIMIT),
+          chunkSearch.searchKeyword(query, HYBRID_CANDIDATE_LIMIT),
+        ]);
+
+        const top = new RrfFusion(rrfK, rrfWeights).rankedTop(
+          semanticRows.map((r) => r.id),
+          keywordRows.map((r) => r.id),
+          limit,
+        );
+
+        const byId = new Map<number, { content: string; metadata: string }>();
+        for (const r of [...semanticRows, ...keywordRows]) {
+          byId.set(r.id, {
+            content: r.content,
+            metadata: r.metadata,
+          });
+        }
+
+        const results = top.map(({ id, rrf_score }) => {
+          const row = byId.get(id);
+          if (!row) throw new Error(`Missing chunk row for id ${id}`);
+          return {
+            id,
+            content: row.content,
+            metadata: row.metadata,
+            rrf_score,
+          };
+        }) as HybridResult[];
+
+        return { results };
       }
 
       default: {
