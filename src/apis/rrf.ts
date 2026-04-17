@@ -13,17 +13,24 @@ export function rrfRankedTop(
   keywordWeight: number,
   limit: number,
 ): { id: number; rrf_score: number }[] {
+  // id -> sum of weighted reciprocal ranks from both lists
   const scores = new Map<number, number>();
+
+  // Semantic list
   for (let i = 0; i < semanticIds.length; i++) {
     const id = semanticIds[i]!;
     const r = i + 1;
     scores.set(id, (scores.get(id) ?? 0) + semanticWeight / (k + r));
   }
+
+  // Keyword list
   for (let i = 0; i < keywordIds.length; i++) {
     const id = keywordIds[i]!;
     const r = i + 1;
     scores.set(id, (scores.get(id) ?? 0) + keywordWeight / (k + r));
   }
+
+  // Sort by fused score descending, keep top `limit`, expose scores as rrf_score
   return [...scores.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
