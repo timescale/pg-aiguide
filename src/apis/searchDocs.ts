@@ -3,22 +3,13 @@ import type { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
 import { embed } from 'ai';
 import { z } from 'zod';
 import type { ServerContext } from '../types.js';
-import {
-  DocChunkSearch,
-  type DocChunkSearchContext,
-} from './docChunkSearch.js';
-import { DEFAULT_RRF_K, rrfRankedTop } from './rrf.js';
-
-const HYBRID_CANDIDATE_LIMIT = 50;
-
-// --- Source routing (MCP `source` → DB `{entityPrefix}_*` tables)
+import { rrf } from './rrf.js';
+import { tableSearch } from './tableSearch.js';
 
 type SourceType = 'tiger' | 'postgres' | 'postgis';
 const ENTITY_NAME_MAPPINGS: Partial<Record<SourceType, string>> = {
   tiger: 'timescale',
 };
-
-// --- Zod: MCP tool input (`search_docs` parameters)
 
 const inputSchema = {
   source: z
@@ -45,7 +36,7 @@ const inputSchema = {
   query: z
     .string()
     .describe(
-      'The search query. For semantic or hybrid search, use natural language. For keyword or hybrid search, the same text is also used for BM25 matching.',
+      'The search query. For semantic search, use natural language. For keyword search, provide keywords. For hybrid, the same text is used for embedding and BM25.',
     ),
   limit: z.coerce
     .number()
@@ -83,8 +74,6 @@ const inputSchema = {
     ),
 } as const;
 
-// --- Zod: MCP tool output (`results[]`; shape depends on `search_type`)
-
 const zBaseResult = z.object({
   id: z
     .number()
@@ -118,7 +107,7 @@ const zHybridResult = zBaseResult.extend({
   rrf_score: z
     .number()
     .describe(
-      'Reciprocal rank fusion score combining semantic and keyword rankings. Higher values indicate higher relevance.',
+      'Hybrid search: fused RRF score from combining semantic and keyword result rankings.',
     ),
 });
 
@@ -132,17 +121,13 @@ const outputSchema = {
 
 type OutputSchema = InferSchema<typeof outputSchema>;
 
-// --- OpenAI query embedding (semantic + hybrid only; chunk search lives in DocChunkSearch)
-
-async function embeddingJsonForQuery(query: string): Promise<string> {
+async function embedQueryJson(query: string): Promise<string> {
   const { embedding } = await embed({
     model: openai.embedding('text-embedding-3-small'),
     value: query,
   });
   return JSON.stringify(embedding);
 }
-
-// --- `search_docs` ApiFactory (orchestrates DocChunkSearch + RRF)
 
 export const searchDocsFactory: ApiFactory<
   ServerContext,
@@ -156,7 +141,7 @@ export const searchDocsFactory: ApiFactory<
   config: {
     title: 'Search Documentation',
     description:
-      'Search documentation using semantic, keyword (BM25), or hybrid (RRF) search. Supports Tiger Cloud (TimescaleDB), PostgreSQL, and PostGIS.',
+      'Search documentation using semantic or keyword search, or hybrid (RRF). Supports Tiger Cloud (TimescaleDB), PostgreSQL, and PostGIS.',
     inputSchema,
     outputSchema,
     annotations: {
@@ -186,59 +171,78 @@ export const searchDocsFactory: ApiFactory<
     if (!source) throw new Error('Invalid source');
 
     const entityPrefix = ENTITY_NAME_MAPPINGS[source as SourceType] ?? source;
-    const ctx: DocChunkSearchContext = {
-      pool: pgPool,
-      schema,
-      entityPrefix,
-      version: version || undefined,
-    };
 
     switch (search_type) {
       case 'semantic': {
-        const embeddingJson = await embeddingJsonForQuery(query);
-        const rows = await new DocChunkSearch(ctx).searchSemantic(
-          embeddingJson,
-          limit,
-        );
-        return { results: rows as SemanticResult[] };
+        const searchParam = await embedQueryJson(query);
+        const result = await tableSearch({
+          pool: pgPool,
+          schema,
+          entityPrefix,
+          version: version ?? undefined,
+          semantic: true,
+          searchParam,
+          limit: limit,
+        });
+        return { results: result as SemanticResult[] };
       }
 
       case 'keyword': {
-        const rows = await new DocChunkSearch(ctx).searchKeyword(query, limit);
-        return { results: rows as KeywordResult[] };
+        const result = await tableSearch({
+          pool: pgPool,
+          schema,
+          entityPrefix,
+          version: version ?? undefined,
+          semantic: false,
+          searchParam: query,
+          limit,
+        });
+        return { results: result as KeywordResult[] };
       }
 
       case 'hybrid': {
-        const embeddingJson = await embeddingJsonForQuery(query);
-        const semanticWeight =
-          passedSemanticWeight != null ? passedSemanticWeight : 1;
-        const keywordWeight =
-          passedKeywordWeight != null ? passedKeywordWeight : 1;
-        const rrfK = passedRrfK != null ? passedRrfK : DEFAULT_RRF_K;
+        const searchParam = await embedQueryJson(query);
 
-        const chunkSearch = new DocChunkSearch(ctx);
         const [semanticRows, keywordRows] = await Promise.all([
-          chunkSearch.searchSemantic(embeddingJson, HYBRID_CANDIDATE_LIMIT),
-          chunkSearch.searchKeyword(query, HYBRID_CANDIDATE_LIMIT),
+          tableSearch({
+            pool: pgPool,
+            schema,
+            entityPrefix,
+            version: version ?? undefined,
+            semantic: true,
+            searchParam,
+            limit: limit * 4,
+          }),
+          tableSearch({
+            pool: pgPool,
+            schema,
+            entityPrefix,
+            version: version ?? undefined,
+            semantic: false,
+            searchParam: query,
+            limit: limit * 4,
+          }),
         ]);
 
-        const top = rrfRankedTop(
-          semanticRows.map((r) => r.id),
-          keywordRows.map((r) => r.id),
-          rrfK,
-          semanticWeight,
-          keywordWeight,
+        const top = rrf({
+          semanticIds: semanticRows.map((r) => r.id),
+          keywordIds: keywordRows.map((r) => r.id),
           limit,
-        );
+          k: passedRrfK ?? undefined,
+          semanticWeight: passedSemanticWeight ?? undefined,
+          keywordWeight: passedKeywordWeight ?? undefined,
+        });
 
+        // Create a map of id to content and metadata for the results
         const byId = new Map<number, { content: string; metadata: string }>();
         for (const r of [...semanticRows, ...keywordRows]) {
           byId.set(r.id, {
             content: r.content,
-            metadata: r.metadata,
+            metadata: r.metadata ?? '',
           });
         }
 
+        // Map the ids to the content and metadata
         const results = top.map(({ id, rrf_score }) => {
           const row = byId.get(id);
           if (!row) throw new Error(`Missing chunk row for id ${id}`);
@@ -248,14 +252,9 @@ export const searchDocsFactory: ApiFactory<
             metadata: row.metadata,
             rrf_score,
           };
-        }) as HybridResult[];
+        });
 
-        return { results };
-      }
-
-      default: {
-        const _exhaustive: never = search_type;
-        throw new Error(`Unhandled search_type: ${_exhaustive}`);
+        return { results: results as HybridResult[] };
       }
     }
   },
