@@ -33,13 +33,14 @@ const createStateStore = (): {
         ]);
 
         // Ensure schema exists
+        const safeSchema = client.escapeIdentifier(schema);
         await client.query(/* sql */ `
-          CREATE SCHEMA IF NOT EXISTS ${schema};
+          CREATE SCHEMA IF NOT EXISTS ${safeSchema};
         `);
 
         // Ensure migrations table exists
         await client.query(/* sql */ `
-          CREATE TABLE IF NOT EXISTS ${schema}.migrations (
+          CREATE TABLE IF NOT EXISTS ${safeSchema}.migrations (
             id SERIAL PRIMARY KEY,
             set JSONB NOT NULL,
             applied_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
@@ -48,7 +49,7 @@ const createStateStore = (): {
 
         // Load the most recent migration set
         const result = await client.query(
-          /* sql */ `SELECT set FROM ${schema}.migrations ORDER BY applied_at DESC LIMIT 1`,
+          /* sql */ `SELECT set FROM ${safeSchema}.migrations ORDER BY applied_at DESC LIMIT 1`,
         );
 
         const set = result.rows.length > 0 ? result.rows[0].set : {};
@@ -65,7 +66,7 @@ const createStateStore = (): {
       try {
         // Insert the entire set as JSONB
         await client.query(
-          /* sql */ `INSERT INTO ${schema}.migrations (set) VALUES ($1)`,
+          /* sql */ `INSERT INTO ${client.escapeIdentifier(schema)}.migrations (set) VALUES ($1)`,
           [JSON.stringify(set)],
         );
 

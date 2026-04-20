@@ -5,6 +5,9 @@ import { z } from 'zod';
 import type { ServerContext } from '../types.js';
 
 type SourceType = 'tiger' | 'postgres' | 'postgis';
+
+const escId = (name: string) => `"${name.replace(/"/g, '""')}"`;
+
 const ENTITY_NAME_MAPPINGS: Partial<Record<SourceType, string>> = {
   tiger: 'timescale',
 };
@@ -135,16 +138,18 @@ export const searchDocsFactory: ApiFactory<
         )
       : query;
 
+    const s = escId(schema);
+    const e = escId(entityPrefix);
     const sql = /* sql */ `
         SELECT
           c.id::int,
           c.content,
           c.metadata::text,
           ${isSemantic ? `c.embedding <=> $1::vector(1536) AS distance` : `  -(c.content <@> to_bm25query($1, '${schema}.${entityPrefix}_chunks_content_idx')) as score`}
-        FROM ${schema}.${entityPrefix}_chunks c
+        FROM ${s}.${e}_chunks c
         ${
           version
-            ? `JOIN ${schema}.${entityPrefix}_pages p ON c.page_id = p.id
+            ? `JOIN ${s}.${e}_pages p ON c.page_id = p.id
         WHERE p.version = $2`
             : ``
         }
