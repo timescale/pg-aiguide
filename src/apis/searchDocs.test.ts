@@ -73,6 +73,131 @@ describe('search_docs — validation', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Defaults and empty-like inputs (must match SEARCH_DOCS_* in searchDocs.ts)
+// ---------------------------------------------------------------------------
+
+describe('search_docs — defaults and empty-like inputs', () => {
+  const DEFAULT_LIMIT = 20;
+  const DEFAULT_SEMANTIC_WEIGHT = 0.7;
+  const HYBRID_POOL_FACTOR = 4;
+
+  test('null limit uses default on keyword path', async () => {
+    let lastParams: unknown[] = [];
+    const pool = poolMock((_sql, params) => {
+      lastParams = params;
+      return { rows: [] };
+    });
+    await invoke(pool, {
+      source: 'tiger',
+      semanticWeight: 0,
+      query: 'wal',
+      limit: null,
+    });
+    expect(lastParams[1]).toBe(DEFAULT_LIMIT);
+  });
+
+  test('omitted limit uses default on keyword path', async () => {
+    let lastParams: unknown[] = [];
+    const pool = poolMock((_sql, params) => {
+      lastParams = params;
+      return { rows: [] };
+    });
+    await invoke(pool, {
+      source: 'tiger',
+      semanticWeight: 0,
+      query: 'wal',
+    });
+    expect(lastParams[1]).toBe(DEFAULT_LIMIT);
+  });
+
+  test('empty-string limit coerces to 0 and is rejected', async () => {
+    const pool = poolMock(() => ({ rows: [] }));
+    await expect(
+      invoke(pool, {
+        source: 'tiger',
+        semanticWeight: 0,
+        query: 'x',
+        limit: '',
+      }),
+    ).rejects.toThrow('Limit must be a positive integer.');
+  });
+
+  test('null semanticWeight uses default hybrid (two queries)', async () => {
+    let queries = 0;
+    const pool = poolMock((sql) => {
+      queries += 1;
+      if (sql.includes('<=>')) {
+        return {
+          rows: [{ id: 100, content: 'a', metadata: '{}', distance: 0.1 }],
+        };
+      }
+      return {
+        rows: [{ id: 200, content: 'b', metadata: '{}', score: 1.0 }],
+      };
+    });
+
+    const out = (await invoke(pool, {
+      source: 'tiger',
+      semanticWeight: null,
+      query: 'compression',
+      limit: 5,
+    })) as { results: { id: number; rrf_score: number }[] };
+
+    expect(queries).toBe(2);
+    expect(out.results).toHaveLength(2);
+    expect(out.results.map((r) => r.id)).toEqual([100, 200]);
+    expect(out.results[0]?.rrf_score).toBeCloseTo(
+      DEFAULT_SEMANTIC_WEIGHT / (60 + 1),
+      10,
+    );
+    expect(out.results[1]?.rrf_score).toBeCloseTo(
+      (1 - DEFAULT_SEMANTIC_WEIGHT) / (60 + 1),
+      10,
+    );
+  });
+
+  test('omitted semanticWeight uses default hybrid (two queries)', async () => {
+    let queries = 0;
+    const pool = poolMock((sql) => {
+      queries += 1;
+      if (sql.includes('<=>')) {
+        return {
+          rows: [{ id: 1, content: 'a', metadata: '{}', distance: 0.1 }],
+        };
+      }
+      return { rows: [{ id: 2, content: 'b', metadata: '{}', score: 1.0 }] };
+    });
+
+    await invoke(pool, {
+      source: 'tiger',
+      query: 'q',
+      limit: 3,
+    });
+
+    expect(queries).toBe(2);
+  });
+
+  test('null limit and null semanticWeight use defaults for hybrid pool size', async () => {
+    let keywordLimit = 0;
+    const pool = poolMock((sql, params) => {
+      if (!sql.includes('<=>')) {
+        keywordLimit = params[params.length - 1] as number;
+      }
+      return { rows: [] };
+    });
+
+    await invoke(pool, {
+      source: 'tiger',
+      semanticWeight: null,
+      query: 'compression',
+      limit: null,
+    });
+
+    expect(keywordLimit).toBe(DEFAULT_LIMIT * HYBRID_POOL_FACTOR);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Keyword search
 // ---------------------------------------------------------------------------
 

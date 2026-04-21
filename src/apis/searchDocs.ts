@@ -11,6 +11,10 @@ const ENTITY_NAME_MAPPINGS: Partial<Record<SourceType, string>> = {
   tiger: 'timescale',
 };
 
+const SEARCH_DOCS_DEFAULT_LIMIT = 20;
+const SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT = 0.7;
+const SEARCH_DOCS_HYBRID_CANDIDATE_POOL_FACTOR = 4;
+
 const inputSchema = {
   source: z
     .enum([
@@ -38,7 +42,7 @@ const inputSchema = {
     .int()
     .nullable()
     .describe(
-      'The maximum number of matches to return. If not provided, default is 10.',
+      `The maximum number of matches to return. Defaults to ${SEARCH_DOCS_DEFAULT_LIMIT}.`,
     ),
   semanticWeight: z
     .number()
@@ -47,7 +51,7 @@ const inputSchema = {
     .max(1)
     .nullable()
     .describe(
-      'Controls the balance between semantic and keyword search. 0 = keyword only, 0.5 = equal mix, 1 = semantic only. Default is 0.7 (favor semantic search).',
+      `Controls the balance between semantic and keyword search. 0 = keyword only, 0.5 = equal mix, 1 = semantic only. Default is ${SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT} (favor semantic search).`,
     ),
 } as const;
 
@@ -132,7 +136,7 @@ export const searchDocsFactory: ApiFactory<
     limit: passedLimit,
     semanticWeight: passedSemanticWeight,
   }): Promise<OutputSchema> => {
-    const limit = passedLimit != null ? passedLimit : 10;
+    const limit = passedLimit != null ? passedLimit : SEARCH_DOCS_DEFAULT_LIMIT;
     if (limit <= 0) {
       throw new Error('Limit must be a positive integer.');
     }
@@ -146,7 +150,8 @@ export const searchDocsFactory: ApiFactory<
 
     const entityPrefix = ENTITY_NAME_MAPPINGS[source as SourceType] ?? source;
 
-    const semanticWeight = passedSemanticWeight ?? 0.7;
+    const semanticWeight =
+      passedSemanticWeight ?? SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT;
 
     if (semanticWeight === 0) {
       const result = await tableSearch({
@@ -184,7 +189,7 @@ export const searchDocsFactory: ApiFactory<
           version: version ?? undefined,
           semantic: true,
           searchParam,
-          limit: limit * 4,
+          limit: limit * SEARCH_DOCS_HYBRID_CANDIDATE_POOL_FACTOR,
         }),
       ),
       tableSearch({
@@ -194,7 +199,7 @@ export const searchDocsFactory: ApiFactory<
         version: version ?? undefined,
         semantic: false,
         searchParam: query,
-        limit: limit * 4,
+        limit: limit * SEARCH_DOCS_HYBRID_CANDIDATE_POOL_FACTOR,
       }),
     ]);
 
