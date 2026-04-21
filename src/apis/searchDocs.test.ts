@@ -40,7 +40,7 @@ describe('search_docs — validation', () => {
     await expect(
       invoke(pool, {
         source: 'tiger',
-        search_type: 'keyword',
+        semanticWeight: 0,
         query: 'x',
         limit: 0,
       }),
@@ -52,7 +52,7 @@ describe('search_docs — validation', () => {
     await expect(
       invoke(pool, {
         source: 'tiger',
-        search_type: 'keyword',
+        semanticWeight: 0,
         query: '  ',
         limit: 5,
       }),
@@ -64,7 +64,7 @@ describe('search_docs — validation', () => {
     await expect(
       invoke(pool, {
         source: '_postgres',
-        search_type: 'keyword',
+        semanticWeight: 0,
         query: 'x',
         limit: 1,
       }),
@@ -83,7 +83,7 @@ describe('search_docs — keyword', () => {
     }));
     const out = (await invoke(pool, {
       source: 'tiger',
-      search_type: 'keyword',
+      semanticWeight: 0,
       query: 'hello',
       limit: 10,
     })) as { results: unknown[] };
@@ -101,7 +101,7 @@ describe('search_docs — keyword', () => {
     });
     await invoke(pool, {
       source: 'tiger',
-      search_type: 'keyword',
+      semanticWeight: 0,
       query: 'hello',
       limit: 10,
     });
@@ -116,7 +116,7 @@ describe('search_docs — keyword', () => {
     });
     await invoke(pool, {
       source: 'postgres_16',
-      search_type: 'keyword',
+      semanticWeight: 0,
       query: 'wal',
       limit: 3,
     });
@@ -140,7 +140,7 @@ describe('search_docs — semantic', () => {
     });
     const out = (await invoke(pool, {
       source: 'tiger',
-      search_type: 'semantic',
+      semanticWeight: 1,
       query: 'what is a hypertable',
       limit: 5,
     })) as { results: { distance: number }[] };
@@ -173,7 +173,7 @@ describe('search_docs — hybrid', () => {
 
     const out = (await invoke(pool, {
       source: 'tiger',
-      search_type: 'hybrid',
+      semanticWeight: 0.5,
       query: 'compression',
       limit: 5,
     })) as { results: { id: number; rrf_score: number }[] };
@@ -181,9 +181,9 @@ describe('search_docs — hybrid', () => {
     expect(queries).toBe(2);
     expect(out.results).toHaveLength(2);
     expect(out.results.map((r) => r.id)).toEqual([100, 200]);
-    // RRF k=60, equal weights: id 100 is rank 1 semantic + rank 2 keyword; id 200 rank 1 keyword only
-    const expected100 = 1 / (60 + 1) + 1 / (60 + 2);
+    // RRF k=60, semanticWeight 0.5 / keywordWeight 0.5
+    const expected100 = 0.5 / (60 + 1) + 0.5 / (60 + 2);
     expect(out.results[0]?.rrf_score).toBeCloseTo(expected100, 10);
-    expect(out.results[1]?.rrf_score).toBeCloseTo(1 / (60 + 1), 10);
+    expect(out.results[1]?.rrf_score).toBeCloseTo(0.5 / (60 + 1), 10);
   });
 });

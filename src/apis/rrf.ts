@@ -28,22 +28,18 @@ export function rrf(input: RrfInput): { id: number; rrf_score: number }[] {
     semanticWeight = DEFAULT_SEMANTIC_WEIGHT,
     keywordWeight = DEFAULT_KEYWORD_WEIGHT,
   } = input;
-  // id -> sum of weighted reciprocal ranks from both lists
   const scores = new Map<number, number>();
 
-  // Semantic list
   semanticIds.forEach((id, i) => {
     const r = i + 1;
     scores.set(id, (scores.get(id) ?? 0) + semanticWeight / (k + r));
   });
 
-  // Keyword list
   keywordIds.forEach((id, i) => {
     const r = i + 1;
     scores.set(id, (scores.get(id) ?? 0) + keywordWeight / (k + r));
   });
 
-  // Sort by fused score descending, keep top `limit`, expose scores as rrf_score
   return [...scores.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)

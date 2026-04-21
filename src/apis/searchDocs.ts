@@ -28,15 +28,10 @@ const inputSchema = {
     .describe(
       'The documentation source to search. "tiger" for Tiger Cloud and TimescaleDB, "postgres" for PostgreSQL, "postgis" for PostGIS spatial extension. Specific versions provided with _X.X suffixes.',
     ),
-  search_type: z
-    .enum(['semantic', 'keyword', 'hybrid'])
-    .describe(
-      'The type of search to perform. "semantic" uses natural language vector similarity, "keyword" uses BM25 keyword matching, "hybrid" runs both and fuses rankings with RRF.',
-    ),
   query: z
     .string()
     .describe(
-      'The search query. For semantic search, use natural language. For keyword search, provide keywords. For hybrid, the same text is used for embedding and BM25.',
+      'The search query. Used for BM25 when keyword or hybrid search applies, and for the embedding when semantic or hybrid search applies.',
     ),
   limit: z.coerce
     .number()
@@ -45,32 +40,14 @@ const inputSchema = {
     .describe(
       'The maximum number of matches to return. If not provided, default is 10.',
     ),
-  keyword_weight: z.coerce
+  semanticWeight: z
     .number()
-    .finite()
-    .nonnegative()
+    .multipleOf(0.1)
+    .min(0)
+    .max(1)
     .nullable()
-    .optional()
     .describe(
-      'Hybrid only: multiplier for BM25 ranks in RRF (default 1.0). Higher favors keyword matches.',
-    ),
-  semantic_weight: z.coerce
-    .number()
-    .finite()
-    .nonnegative()
-    .nullable()
-    .optional()
-    .describe(
-      'Hybrid only: multiplier for vector ranks in RRF (default 1.0). Higher favors semantic matches.',
-    ),
-  rrf_k: z.coerce
-    .number()
-    .finite()
-    .positive()
-    .nullable()
-    .optional()
-    .describe(
-      'Hybrid only: RRF smoothing constant k in weight/(k+rank) (default 60). Higher smooths rank differences.',
+      'Controls the balance between semantic and keyword search. 0 = keyword only, 0.5 = equal mix, 1 = semantic only. Default is 0.7 (favor semantic search).',
     ),
 } as const;
 
@@ -141,7 +118,7 @@ export const searchDocsFactory: ApiFactory<
   config: {
     title: 'Search Documentation',
     description:
-      'Search documentation using semantic or keyword search, or hybrid (RRF). Supports Tiger Cloud (TimescaleDB), PostgreSQL, and PostGIS.',
+      'Search documentation with hybrid semantic (vector) and keyword (BM25) search. Use semanticWeight to choose keyword-only (0), semantic-only (1), or a blend; mid values fuse rankings with RRF. Supports Tiger Cloud (TimescaleDB), PostgreSQL, and PostGIS.',
     inputSchema,
     outputSchema,
     annotations: {
@@ -151,12 +128,9 @@ export const searchDocsFactory: ApiFactory<
   },
   fn: async ({
     source: passedSource,
-    search_type,
     query,
     limit: passedLimit,
-    keyword_weight: passedKeywordWeight,
-    semantic_weight: passedSemanticWeight,
-    rrf_k: passedRrfK,
+    semanticWeight: passedSemanticWeight,
   }): Promise<OutputSchema> => {
     const limit = passedLimit != null ? passedLimit : 10;
     if (limit <= 0) {
@@ -172,91 +146,86 @@ export const searchDocsFactory: ApiFactory<
 
     const entityPrefix = ENTITY_NAME_MAPPINGS[source as SourceType] ?? source;
 
-    switch (search_type) {
-      case 'semantic': {
-        const searchParam = await embedQueryJson(query);
-        const result = await tableSearch({
+    const semanticWeight = passedSemanticWeight ?? 0.7;
+
+    if (semanticWeight === 0) {
+      const result = await tableSearch({
+        pool: pgPool,
+        schema,
+        entityPrefix,
+        version: version ?? undefined,
+        semantic: false,
+        searchParam: query,
+        limit,
+      });
+      return { results: result as KeywordResult[] };
+    }
+
+    if (semanticWeight === 1) {
+      const searchParam = await embedQueryJson(query);
+      const result = await tableSearch({
+        pool: pgPool,
+        schema,
+        entityPrefix,
+        version: version ?? undefined,
+        semantic: true,
+        searchParam,
+        limit,
+      });
+      return { results: result as SemanticResult[] };
+    }
+
+    const [semanticRows, keywordRows] = await Promise.all([
+      embedQueryJson(query).then((searchParam) =>
+        tableSearch({
           pool: pgPool,
           schema,
           entityPrefix,
           version: version ?? undefined,
           semantic: true,
           searchParam,
-          limit: limit,
-        });
-        return { results: result as SemanticResult[] };
-      }
+          limit: limit * 4,
+        }),
+      ),
+      tableSearch({
+        pool: pgPool,
+        schema,
+        entityPrefix,
+        version: version ?? undefined,
+        semantic: false,
+        searchParam: query,
+        limit: limit * 4,
+      }),
+    ]);
 
-      case 'keyword': {
-        const result = await tableSearch({
-          pool: pgPool,
-          schema,
-          entityPrefix,
-          version: version ?? undefined,
-          semantic: false,
-          searchParam: query,
-          limit,
-        });
-        return { results: result as KeywordResult[] };
-      }
+    const top = rrf({
+      semanticIds: semanticRows.map((r) => r.id),
+      keywordIds: keywordRows.map((r) => r.id),
+      limit,
+      semanticWeight,
+      keywordWeight: 1 - semanticWeight,
+    });
 
-      case 'hybrid': {
-        const searchParam = await embedQueryJson(query);
-
-        const [semanticRows, keywordRows] = await Promise.all([
-          tableSearch({
-            pool: pgPool,
-            schema,
-            entityPrefix,
-            version: version ?? undefined,
-            semantic: true,
-            searchParam,
-            limit: limit * 4,
-          }),
-          tableSearch({
-            pool: pgPool,
-            schema,
-            entityPrefix,
-            version: version ?? undefined,
-            semantic: false,
-            searchParam: query,
-            limit: limit * 4,
-          }),
-        ]);
-
-        const top = rrf({
-          semanticIds: semanticRows.map((r) => r.id),
-          keywordIds: keywordRows.map((r) => r.id),
-          limit,
-          k: passedRrfK ?? undefined,
-          semanticWeight: passedSemanticWeight ?? undefined,
-          keywordWeight: passedKeywordWeight ?? undefined,
-        });
-
-        // Create a map of id to content and metadata for the results
-        const byId = new Map<number, { content: string; metadata: string }>();
-        for (const r of [...semanticRows, ...keywordRows]) {
-          byId.set(r.id, {
-            content: r.content,
-            metadata: r.metadata ?? '',
-          });
-        }
-
-        // Map the ids to the content and metadata
-        const results = top.map(({ id, rrf_score }) => {
-          const row = byId.get(id);
-          if (!row) throw new Error(`Missing chunk row for id ${id}`);
-          return {
-            id,
-            content: row.content,
-            metadata: row.metadata,
-            rrf_score,
-          };
-        });
-
-        return { results: results as HybridResult[] };
-      }
+    const byId = new Map<number, { content: string; metadata: string }>();
+    for (const r of [...semanticRows, ...keywordRows]) {
+      byId.set(r.id, {
+        content: r.content,
+        metadata: r.metadata ?? '',
+      });
     }
+
+    const results = top.map(({ id, rrf_score }) => {
+      const row = byId.get(id);
+      if (!row) throw new Error(`Missing chunk row for id ${id}`);
+      return {
+        id,
+        content: row.content,
+        metadata: row.metadata,
+        rrf_score,
+      };
+    });
+
+    return { results: results as HybridResult[] };
   },
   pickResult: (r) => r.results,
 });
