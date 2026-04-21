@@ -1,6 +1,5 @@
 import type { Pool } from 'pg';
 
-/** Same inputs as original inlined `search_docs` (pool + schema + entityPrefix + version + search). */
 export type TableSearchContext = {
   pool: Pool;
   schema: string;
