@@ -4,7 +4,7 @@ import { embed } from 'ai';
 import { z } from 'zod';
 import type { ServerContext } from '../types.js';
 import { rrf } from './rrf.js';
-import { tableSearch } from './tableSearch.js';
+import { type TableSearchContext, tableSearch } from './tableSearch.js';
 
 type SourceType = 'tiger' | 'postgres' | 'postgis';
 const ENTITY_NAME_MAPPINGS: Partial<Record<SourceType, string>> = {
@@ -150,56 +150,47 @@ export const searchDocsFactory: ApiFactory<
 
     const entityPrefix = ENTITY_NAME_MAPPINGS[source as SourceType] ?? source;
 
+    const tableSearchBase = {
+      pool: pgPool,
+      schema,
+      entityPrefix,
+      version: version ?? undefined,
+      semantic: false,
+      searchParam: query,
+      limit,
+    };
+
     const semanticWeight =
       passedSemanticWeight ?? SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT;
 
     if (semanticWeight === 0) {
-      const result = await tableSearch({
-        pool: pgPool,
-        schema,
-        entityPrefix,
-        version: version ?? undefined,
-        semantic: false,
-        searchParam: query,
-        limit,
-      });
+      const result = await tableSearch({ ...tableSearchBase });
       return { results: result as KeywordResult[] };
     }
 
     if (semanticWeight === 1) {
       const searchParam = await embedQueryJson(query);
       const result = await tableSearch({
-        pool: pgPool,
-        schema,
-        entityPrefix,
-        version: version ?? undefined,
+        ...tableSearchBase,
         semantic: true,
         searchParam,
-        limit,
       });
       return { results: result as SemanticResult[] };
     }
 
+    const hybridLimit = limit * SEARCH_DOCS_HYBRID_CANDIDATE_POOL_FACTOR;
     const [semanticRows, keywordRows] = await Promise.all([
       embedQueryJson(query).then((searchParam) =>
         tableSearch({
-          pool: pgPool,
-          schema,
-          entityPrefix,
-          version: version ?? undefined,
+          ...tableSearchBase,
           semantic: true,
           searchParam,
-          limit: limit * SEARCH_DOCS_HYBRID_CANDIDATE_POOL_FACTOR,
+          limit: hybridLimit,
         }),
       ),
       tableSearch({
-        pool: pgPool,
-        schema,
-        entityPrefix,
-        version: version ?? undefined,
-        semantic: false,
-        searchParam: query,
-        limit: limit * SEARCH_DOCS_HYBRID_CANDIDATE_POOL_FACTOR,
+        ...tableSearchBase,
+        limit: hybridLimit,
       }),
     ]);
 
@@ -208,7 +199,6 @@ export const searchDocsFactory: ApiFactory<
       keywordIds: keywordRows.map((r) => r.id),
       limit,
       semanticWeight,
-      keywordWeight: 1 - semanticWeight,
     });
 
     const byId = new Map<number, { content: string; metadata: string }>();
