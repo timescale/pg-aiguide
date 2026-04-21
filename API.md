@@ -6,7 +6,7 @@ All methods are exposed as MCP tools.
 
 ### `search_docs`
 
-Unified search tool for documentation using **semantic** (vector similarity), **keyword** (BM25), or **hybrid** (both, merged with reciprocal rank fusion).
+Unified search tool for documentation using **semantic** (vector similarity), **keyword** (BM25), or **hybrid** (both, merged with reciprocal rank fusion). Mode is selected with **`semanticWeight`**.
 
 **MCP Tool**: `search_docs`
 
@@ -17,14 +17,14 @@ Unified search tool for documentation using **semantic** (vector similarity), **
   // required — corpus and optional version encoded in one enum value:
   "source": "postgres_17",
   //   "tiger" | "postgres_14" … "postgres_18" | "postgis_3.3" … "postgis_3.6"
-  "search_type": "semantic", // required: "semantic" | "keyword" | "hybrid"
   "query": "How do I create an index?", // required
-  "limit": 10 // optional; default 10 if omitted
+  "limit": 20, // optional; default 20 if omitted or null
+  "semanticWeight": 0.7 // optional; 0–1 in 0.1 steps; default 0.7 if omitted or null
 }
 ```
 
 - **`source`**: `tiger` (Tiger Cloud / TimescaleDB), `postgres_XX` for a specific PostgreSQL manual version, or `postgis_X.X` for PostGIS. There is no separate `version` field.
-- **`search_type`**: `hybrid` runs semantic and keyword search in parallel (two DB queries), fuses ranked lists with RRF (`k = 60`), and returns **`rrf_score`** per row.
+- **`semanticWeight`**: `0` = keyword only, `1` = semantic only. Values strictly between `0` and `1` run semantic and keyword search in parallel (two DB queries), fuse ranked lists with RRF (`k = 60`), and return **`rrf_score`** per row.
 
 #### Output (Semantic Search)
 
