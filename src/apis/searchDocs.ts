@@ -150,7 +150,7 @@ export const searchDocsFactory: ApiFactory<
 
     const entityPrefix = ENTITY_NAME_MAPPINGS[source as SourceType] ?? source;
 
-    const tableSearchBase = {
+    const tableSearchCtx = {
       pool: pgPool,
       schema,
       entityPrefix,
@@ -164,14 +164,14 @@ export const searchDocsFactory: ApiFactory<
       passedSemanticWeight ?? SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT;
 
     if (semanticWeight === 0) {
-      const result = await tableSearch({ ...tableSearchBase });
+      const result = await tableSearch({ ...tableSearchCtx });
       return { results: result as KeywordResult[] };
     }
 
     if (semanticWeight === 1) {
       const searchParam = await embedQueryJson(query);
       const result = await tableSearch({
-        ...tableSearchBase,
+        ...tableSearchCtx,
         semantic: true,
         searchParam,
       });
@@ -182,14 +182,14 @@ export const searchDocsFactory: ApiFactory<
     const [semanticRows, keywordRows] = await Promise.all([
       embedQueryJson(query).then((searchParam) =>
         tableSearch({
-          ...tableSearchBase,
+          ...tableSearchCtx,
           semantic: true,
           searchParam,
           limit: hybridLimit,
         }),
       ),
       tableSearch({
-        ...tableSearchBase,
+        ...tableSearchCtx,
         limit: hybridLimit,
       }),
     ]);
