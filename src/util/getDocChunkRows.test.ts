@@ -15,13 +15,13 @@ describe('getDocChunkRows', () => {
   test('semantic SQL uses chunks table, vector(1536), distance, LIMIT $2 without version', async () => {
     let sql = '';
     let params: unknown[] = [];
-    const pool = poolMock((s, p) => {
+    const pgPool = poolMock((s, p) => {
       sql = s;
       params = p;
       return { rows: [] };
     });
     await getDocChunkRows({
-      pool,
+      pgPool,
       schema: 'doc',
       entityPrefix: 'timescale',
       version: null,
@@ -45,13 +45,13 @@ describe('getDocChunkRows', () => {
   test('semantic SQL with version: pages join, version bind, ORDER BY distance, LIMIT $3', async () => {
     let sql = '';
     let params: unknown[] = [];
-    const pool = poolMock((s, p) => {
+    const pgPool = poolMock((s, p) => {
       sql = s;
       params = p;
       return { rows: [] };
     });
     await getDocChunkRows({
-      pool,
+      pgPool,
       schema: 'doc',
       entityPrefix: 'postgres',
       version: '18',
@@ -76,13 +76,13 @@ describe('getDocChunkRows', () => {
   test('keyword SQL uses chunks table, BM25 index, score, LIMIT $2 without version', async () => {
     let sql = '';
     let params: unknown[] = [];
-    const pool = poolMock((s, p) => {
+    const pgPool = poolMock((s, p) => {
       sql = s;
       params = p;
       return { rows: [] };
     });
     await getDocChunkRows({
-      pool,
+      pgPool,
       schema: 'doc',
       entityPrefix: 'postgres',
       version: null,
@@ -106,13 +106,13 @@ describe('getDocChunkRows', () => {
   test('with version adds pages join, version bind, LIMIT $3', async () => {
     let sql = '';
     let params: unknown[] = [];
-    const pool = poolMock((s, p) => {
+    const pgPool = poolMock((s, p) => {
       sql = s;
       params = p;
       return { rows: [] };
     });
     await getDocChunkRows({
-      pool,
+      pgPool,
       schema: 'doc',
       entityPrefix: 'postgres',
       version: '16',
