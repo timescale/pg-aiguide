@@ -164,7 +164,7 @@ export const searchDocsFactory: ApiFactory<
       passedSemanticWeight ?? SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT;
 
     if (semanticWeight === 0) {
-      const result = await tableSearch({ ...tableSearchCtx });
+      const result = await tableSearch(tableSearchCtx);
       return { results: result as KeywordResult[] };
     }
 
