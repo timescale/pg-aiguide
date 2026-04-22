@@ -88,7 +88,9 @@ describe('rrf()', () => {
     expect(top).toHaveLength(5);
     expect(top.map((t) => t.id)).toEqual([1, 11, 2, 12, 3]);
     for (let i = 0; i < top.length - 1; i++) {
-      expect(top[i]?.rrf_score).toBeGreaterThanOrEqual(top[i + 1]?.rrf_score ?? 0);
+      expect(top[i]?.rrf_score).toBeGreaterThanOrEqual(
+        top[i + 1]?.rrf_score ?? 0,
+      );
     }
   });
 

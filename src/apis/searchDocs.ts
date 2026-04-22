@@ -3,11 +3,11 @@ import type { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
 import { embed } from 'ai';
 import { z } from 'zod';
 import type { ServerContext } from '../types.js';
-import { rrf } from '../util/rrf.js';
 import {
   type GetDocChunkRowsContext,
   getDocChunkRows,
 } from '../util/getDocChunkRows.js';
+import { rrf } from '../util/rrf.js';
 
 type SourceType = 'tiger' | 'postgres' | 'postgis';
 const ENTITY_NAME_MAPPINGS: Partial<Record<SourceType, string>> = {

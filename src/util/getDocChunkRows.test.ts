@@ -14,10 +14,8 @@ function poolMock(
 describe('getDocChunkRows', () => {
   test('semantic SQL uses chunks table, vector(1536), distance, LIMIT $2 without version', async () => {
     let sql = '';
-    let params: unknown[] = [];
-    const pgPool = poolMock((s, p) => {
+    const pgPool = poolMock((s, _p) => {
       sql = s;
-      params = p;
       return { rows: [] };
     });
     await getDocChunkRows({
@@ -44,10 +42,8 @@ describe('getDocChunkRows', () => {
 
   test('semantic SQL with version: pages join, version bind, ORDER BY distance, LIMIT $3', async () => {
     let sql = '';
-    let params: unknown[] = [];
-    const pgPool = poolMock((s, p) => {
+    const pgPool = poolMock((s, _p) => {
       sql = s;
-      params = p;
       return { rows: [] };
     });
     await getDocChunkRows({
@@ -75,10 +71,8 @@ describe('getDocChunkRows', () => {
 
   test('keyword SQL uses chunks table, BM25 index, score, LIMIT $2 without version', async () => {
     let sql = '';
-    let params: unknown[] = [];
-    const pgPool = poolMock((s, p) => {
+    const pgPool = poolMock((s, _p) => {
       sql = s;
-      params = p;
       return { rows: [] };
     });
     await getDocChunkRows({
@@ -105,10 +99,8 @@ describe('getDocChunkRows', () => {
 
   test('with version adds pages join, version bind, LIMIT $3', async () => {
     let sql = '';
-    let params: unknown[] = [];
-    const pgPool = poolMock((s, p) => {
+    const pgPool = poolMock((s, _p) => {
       sql = s;
-      params = p;
       return { rows: [] };
     });
     await getDocChunkRows({
