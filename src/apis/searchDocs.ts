@@ -136,7 +136,7 @@ export const searchDocsFactory: ApiFactory<
     limit: passedLimit,
     semanticWeight: passedSemanticWeight,
   }): Promise<OutputSchema> => {
-    const limit = passedLimit != null ? passedLimit : SEARCH_DOCS_DEFAULT_LIMIT;
+    const limit = passedLimit ?? SEARCH_DOCS_DEFAULT_LIMIT;
     if (limit <= 0) {
       throw new Error('Limit must be a positive integer.');
     }
