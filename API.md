@@ -14,9 +14,9 @@ Unified search tool for documentation using **semantic** (vector similarity), **
 
 ```jsonc
 {
-  // required — corpus and optional version encoded in one enum value:
-  "source": "postgres_17",
+  // required — corpus and optional version in one enum value:
   //   "tiger" | "postgres_14" … "postgres_18" | "postgis_3.3" … "postgis_3.6"
+  "source": "postgres_17",
   "query": "How do I create an index?", // required
   "limit": 20, // optional; default 20 if omitted or null
   "semanticWeight": 0.7 // optional; 0–1 in 0.1 steps; default 0.7 if omitted or null
@@ -24,7 +24,7 @@ Unified search tool for documentation using **semantic** (vector similarity), **
 ```
 
 - **`source`**: `tiger` (Tiger Cloud / TimescaleDB), `postgres_XX` for a specific PostgreSQL manual version, or `postgis_X.X` for PostGIS. There is no separate `version` field.
-- **`semanticWeight`**: `0` = keyword only, `1` = semantic only. Values strictly between `0` and `1` run semantic and keyword search in parallel (two DB queries), fuse ranked lists with RRF (`k = 60`), and return **`rrf_score`** per row.
+- **`semanticWeight`**: `0` = keyword only, `1` = semantic only. Values strictly between `0` and `1` run semantic and keyword search in parallel (two DB queries), fuse ranked lists with RRF, and return **`rrf_score`** per row.
 
 #### Output (Semantic Search)
 
