@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { Pool } from 'pg';
-import { tableSearch } from './tableSearch.js';
+import { getDocChunkRows } from './getDocChunkRows.js';
 
 function poolMock(
   onQuery: (sql: string, params: unknown[]) => { rows: unknown[] },
@@ -11,7 +11,7 @@ function poolMock(
   } as unknown as Pool;
 }
 
-describe('tableSearch', () => {
+describe('getDocChunkRows', () => {
   test('semantic SQL uses chunks table, vector(1536), distance, LIMIT $2 without version', async () => {
     let sql = '';
     let params: unknown[] = [];
@@ -20,10 +20,11 @@ describe('tableSearch', () => {
       params = p;
       return { rows: [] };
     });
-    await tableSearch({
+    await getDocChunkRows({
       pool,
       schema: 'doc',
       entityPrefix: 'timescale',
+      version: null,
       semantic: true,
       searchParam: '[]',
       limit: 3,
@@ -49,7 +50,7 @@ describe('tableSearch', () => {
       params = p;
       return { rows: [] };
     });
-    await tableSearch({
+    await getDocChunkRows({
       pool,
       schema: 'doc',
       entityPrefix: 'postgres',
@@ -80,10 +81,11 @@ describe('tableSearch', () => {
       params = p;
       return { rows: [] };
     });
-    await tableSearch({
+    await getDocChunkRows({
       pool,
       schema: 'doc',
       entityPrefix: 'postgres',
+      version: null,
       semantic: false,
       searchParam: 'wal',
       limit: 2,
@@ -109,7 +111,7 @@ describe('tableSearch', () => {
       params = p;
       return { rows: [] };
     });
-    await tableSearch({
+    await getDocChunkRows({
       pool,
       schema: 'doc',
       entityPrefix: 'postgres',

@@ -1,10 +1,10 @@
 import type { Pool } from 'pg';
 
-export type TableSearchContext = {
-  pool: Pool;
+export type GetDocChunkRowsContext = {
+  pgPool: Pool;
   schema: string;
   entityPrefix: string;
-  version?: string;
+  version: string | null;
   semantic: boolean;
   searchParam: string;
   limit: number;
@@ -24,10 +24,10 @@ export type KeywordChunkRow = {
   score: number;
 };
 
-export async function tableSearch(
-  ctx: TableSearchContext,
+export async function getDocChunkRows(
+  ctx: GetDocChunkRowsContext,
 ): Promise<SemanticChunkRow[] | KeywordChunkRow[]> {
-  const { pool, schema, entityPrefix, semantic, searchParam, limit } = ctx;
+  const { pgPool, schema, entityPrefix, semantic, searchParam, limit } = ctx;
   const version = ctx.version;
   const chunks = `${schema}.${entityPrefix}_chunks`;
   const bm25Idx = `${schema}.${entityPrefix}_chunks_content_idx`;
@@ -56,6 +56,6 @@ export async function tableSearch(
         LIMIT $${version ? '3' : '2'}
         `;
 
-  const { rows } = await pool.query(sql, params);
+  const { rows } = await pgPool.query(sql, params);
   return rows as SemanticChunkRow[] | KeywordChunkRow[];
 }

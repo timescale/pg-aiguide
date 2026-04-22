@@ -3,8 +3,11 @@ import type { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
 import { embed } from 'ai';
 import { z } from 'zod';
 import type { ServerContext } from '../types.js';
-import { rrf } from './rrf.js';
-import { type TableSearchContext, tableSearch } from './tableSearch.js';
+import { rrf } from '../util/rrf.js';
+import {
+  type GetDocChunkRowsContext,
+  getDocChunkRows,
+} from '../util/getDocChunkRows.js';
 
 type SourceType = 'tiger' | 'postgres' | 'postgis';
 const ENTITY_NAME_MAPPINGS: Partial<Record<SourceType, string>> = {
@@ -144,17 +147,16 @@ export const searchDocsFactory: ApiFactory<
     if (!query.trim()) {
       throw new Error('Query must be a non-empty string.');
     }
-    const [source, version] = passedSource.split('_');
-
+    const [source, version = null] = passedSource.split('_');
     if (!source) throw new Error('Invalid source');
 
     const entityPrefix = ENTITY_NAME_MAPPINGS[source as SourceType] ?? source;
 
-    const tableSearchCtx = {
-      pool: pgPool,
+    const chunkRowsCtx: GetDocChunkRowsContext = {
+      pgPool,
       schema,
       entityPrefix,
-      version: version ?? undefined,
+      version,
       semantic: false,
       searchParam: query,
       limit,
@@ -164,14 +166,14 @@ export const searchDocsFactory: ApiFactory<
       passedSemanticWeight ?? SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT;
 
     if (semanticWeight === 0) {
-      const result = await tableSearch(tableSearchCtx);
+      const result = await getDocChunkRows(chunkRowsCtx);
       return { results: result as KeywordResult[] };
     }
 
     if (semanticWeight === 1) {
       const searchParam = await embedQueryJson(query);
-      const result = await tableSearch({
-        ...tableSearchCtx,
+      const result = await getDocChunkRows({
+        ...chunkRowsCtx,
         semantic: true,
         searchParam,
       });
@@ -181,15 +183,15 @@ export const searchDocsFactory: ApiFactory<
     const hybridLimit = limit * SEARCH_DOCS_HYBRID_CANDIDATE_POOL_FACTOR;
     const [semanticRows, keywordRows] = await Promise.all([
       embedQueryJson(query).then((searchParam) =>
-        tableSearch({
-          ...tableSearchCtx,
+        getDocChunkRows({
+          ...chunkRowsCtx,
           semantic: true,
           searchParam,
           limit: hybridLimit,
         }),
       ),
-      tableSearch({
-        ...tableSearchCtx,
+      getDocChunkRows({
+        ...chunkRowsCtx,
         limit: hybridLimit,
       }),
     ]);
