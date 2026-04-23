@@ -3,11 +3,20 @@ import type { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
 import { embed } from 'ai';
 import { z } from 'zod';
 import type { ServerContext } from '../types.js';
+import {
+  type GetDocChunkRowsContext,
+  getDocChunkRows,
+} from '../util/getDocChunkRows.js';
+import { rrf } from '../util/rrf.js';
 
 type SourceType = 'tiger' | 'postgres' | 'postgis';
 const ENTITY_NAME_MAPPINGS: Partial<Record<SourceType, string>> = {
   tiger: 'timescale',
 };
+
+const SEARCH_DOCS_DEFAULT_LIMIT = 20;
+const SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT = 0.7;
+const SEARCH_DOCS_HYBRID_CANDIDATE_POOL_FACTOR = 4;
 
 const inputSchema = {
   source: z
@@ -26,22 +35,26 @@ const inputSchema = {
     .describe(
       'The documentation source to search. "tiger" for Tiger Cloud and TimescaleDB, "postgres" for PostgreSQL, "postgis" for PostGIS spatial extension. Specific versions provided with _X.X suffixes.',
     ),
-  search_type: z
-    .enum(['semantic', 'keyword'])
-    .describe(
-      'The type of search to perform. "semantic" uses natural language vector similarity, "keyword" uses BM25 keyword matching.',
-    ),
   query: z
     .string()
     .describe(
-      'The search query. For semantic search, use natural language. For keyword search, provide keywords.',
+      'The search query. Used for BM25 when keyword or hybrid search applies, and for the embedding when semantic or hybrid search applies.',
     ),
   limit: z.coerce
     .number()
     .int()
     .nullable()
     .describe(
-      'The maximum number of matches to return. If not provided, default is 10.',
+      `The maximum number of matches to return. Defaults to ${SEARCH_DOCS_DEFAULT_LIMIT}.`,
+    ),
+  semanticWeight: z
+    .number()
+    .multipleOf(0.1)
+    .min(0)
+    .max(1)
+    .nullable()
+    .describe(
+      `Controls the balance between semantic and keyword search. 0 = keyword only, 0.5 = equal mix, 1 = semantic only. Default is ${SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT} (favor semantic search).`,
     ),
 } as const;
 
@@ -74,14 +87,31 @@ const zKeywordResult = zBaseResult.extend({
     ),
 });
 
+const zHybridResult = zBaseResult.extend({
+  rrf_score: z
+    .number()
+    .describe(
+      'Hybrid search: fused RRF score from combining semantic and keyword result rankings.',
+    ),
+});
+
 type SemanticResult = z.infer<typeof zSemanticResult>;
 type KeywordResult = z.infer<typeof zKeywordResult>;
+type HybridResult = z.infer<typeof zHybridResult>;
 
 const outputSchema = {
-  results: z.array(z.union([zSemanticResult, zKeywordResult])),
+  results: z.array(z.union([zSemanticResult, zKeywordResult, zHybridResult])),
 } as const;
 
 type OutputSchema = InferSchema<typeof outputSchema>;
+
+async function embedQueryJson(query: string): Promise<string> {
+  const { embedding } = await embed({
+    model: openai.embedding('text-embedding-3-small'),
+    value: query,
+  });
+  return JSON.stringify(embedding);
+}
 
 export const searchDocsFactory: ApiFactory<
   ServerContext,
@@ -95,7 +125,7 @@ export const searchDocsFactory: ApiFactory<
   config: {
     title: 'Search Documentation',
     description:
-      'Search documentation using semantic or keyword search. Supports Tiger Cloud (TimescaleDB), PostgreSQL, and PostGIS.',
+      'Search documentation with hybrid semantic (vector) and keyword (BM25) search. Use semanticWeight to choose keyword-only (0), semantic-only (1), or a blend; mid values fuse rankings with RRF. Supports Tiger Cloud (TimescaleDB), PostgreSQL, and PostGIS.',
     inputSchema,
     outputSchema,
     annotations: {
@@ -105,11 +135,11 @@ export const searchDocsFactory: ApiFactory<
   },
   fn: async ({
     source: passedSource,
-    search_type,
     query,
     limit: passedLimit,
+    semanticWeight: passedSemanticWeight,
   }): Promise<OutputSchema> => {
-    const limit = passedLimit != null ? passedLimit : 10;
+    const limit = passedLimit ?? SEARCH_DOCS_DEFAULT_LIMIT;
     if (limit <= 0) {
       throw new Error('Limit must be a positive integer.');
     }
@@ -117,47 +147,82 @@ export const searchDocsFactory: ApiFactory<
     if (!query.trim()) {
       throw new Error('Query must be a non-empty string.');
     }
-    const [source, version] = passedSource.split('_');
-
+    const [source, version = null] = passedSource.split('_');
     if (!source) throw new Error('Invalid source');
 
     const entityPrefix = ENTITY_NAME_MAPPINGS[source as SourceType] ?? source;
 
-    const isSemantic = search_type === 'semantic';
-    const searchParam = isSemantic
-      ? JSON.stringify(
-          (
-            await embed({
-              model: openai.embedding('text-embedding-3-small'),
-              value: query,
-            })
-          ).embedding,
-        )
-      : query;
+    const chunkRowsCtx: GetDocChunkRowsContext = {
+      pgPool,
+      schema,
+      entityPrefix,
+      version,
+      semantic: false,
+      searchParam: query,
+      limit,
+    };
 
-    const sql = /* sql */ `
-        SELECT
-          c.id::int,
-          c.content,
-          c.metadata::text,
-          ${isSemantic ? `c.embedding <=> $1::vector(1536) AS distance` : `  -(c.content <@> to_bm25query($1, '${schema}.${entityPrefix}_chunks_content_idx')) as score`}
-        FROM ${schema}.${entityPrefix}_chunks c
-        ${
-          version
-            ? `JOIN ${schema}.${entityPrefix}_pages p ON c.page_id = p.id
-        WHERE p.version = $2`
-            : ``
-        }
-        ORDER BY ${isSemantic ? 'distance' : `c.content <@> to_bm25query($1, '${schema}.${entityPrefix}_chunks_content_idx')`}
-        LIMIT $${version ? '3' : '2'}
-        `;
+    const semanticWeight =
+      passedSemanticWeight ?? SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT;
 
-    const params = [searchParam, ...(version ? [version] : []), limit];
-    const result = await pgPool.query<SemanticResult | KeywordResult>(
-      sql,
-      params,
-    );
-    return { results: result.rows };
+    if (semanticWeight === 0) {
+      const result = await getDocChunkRows(chunkRowsCtx);
+      return { results: result as KeywordResult[] };
+    }
+
+    if (semanticWeight === 1) {
+      const searchParam = await embedQueryJson(query);
+      const result = await getDocChunkRows({
+        ...chunkRowsCtx,
+        semantic: true,
+        searchParam,
+      });
+      return { results: result as SemanticResult[] };
+    }
+
+    const hybridLimit = limit * SEARCH_DOCS_HYBRID_CANDIDATE_POOL_FACTOR;
+    const [semanticRows, keywordRows] = await Promise.all([
+      embedQueryJson(query).then((searchParam) =>
+        getDocChunkRows({
+          ...chunkRowsCtx,
+          semantic: true,
+          searchParam,
+          limit: hybridLimit,
+        }),
+      ),
+      getDocChunkRows({
+        ...chunkRowsCtx,
+        limit: hybridLimit,
+      }),
+    ]);
+
+    const top = rrf({
+      semanticIds: semanticRows.map((r) => r.id),
+      keywordIds: keywordRows.map((r) => r.id),
+      limit,
+      semanticWeight,
+    });
+
+    const byId = new Map<number, { content: string; metadata: string }>();
+    for (const r of [...semanticRows, ...keywordRows]) {
+      byId.set(r.id, {
+        content: r.content,
+        metadata: r.metadata ?? '',
+      });
+    }
+
+    const results = top.map(({ id, rrf_score }) => {
+      const row = byId.get(id);
+      if (!row) throw new Error(`Missing chunk row for id ${id}`);
+      return {
+        id,
+        content: row.content,
+        metadata: row.metadata,
+        rrf_score,
+      };
+    });
+
+    return { results: results as HybridResult[] };
   },
   pickResult: (r) => r.results,
 });

@@ -6,7 +6,7 @@ All methods are exposed as MCP tools.
 
 ### `search_docs`
 
-Unified search tool for querying documentation using semantic (vector similarity) or keyword (BM25) search.
+Unified search tool for documentation using **semantic** (vector similarity), **keyword** (BM25), or **hybrid** (both, merged with reciprocal rank fusion). Mode is selected with **`semanticWeight`**.
 
 **MCP Tool**: `search_docs`
 
@@ -14,13 +14,17 @@ Unified search tool for querying documentation using semantic (vector similarity
 
 ```jsonc
 {
-  "source": "postgres", // required: "postgres", "tiger", or "postgis"
-  "search_type": "semantic", // required: "semantic" or "keyword"
-  "query": "How do I create an index?", // required: search query
-  "version": "17", // required: PostgreSQL version ("14"-"18" or "latest"), ignored for tiger/postgis
-  "limit": 10 // required: maximum results to return
+  // required — corpus and optional version in one enum value:
+  //   "tiger" | "postgres_14" … "postgres_18" | "postgis_3.3" … "postgis_3.6"
+  "source": "postgres_17",
+  "query": "How do I create an index?", // required
+  "limit": 20, // optional; default 20 if omitted or null
+  "semanticWeight": 0.7 // optional; 0–1 in 0.1 steps; default 0.7 if omitted or null
 }
 ```
+
+- **`source`**: `tiger` (Tiger Cloud / TimescaleDB), `postgres_XX` for a specific PostgreSQL manual version, or `postgis_X.X` for PostGIS. There is no separate `version` field.
+- **`semanticWeight`**: `0` = keyword only, `1` = semantic only. Values strictly between `0` and `1` run semantic and keyword search in parallel (two DB queries), fuse ranked lists with RRF, and return **`rrf_score`** per row.
 
 #### Output (Semantic Search)
 
@@ -47,6 +51,21 @@ Unified search tool for querying documentation using semantic (vector similarity
       "content": "CREATE INDEX ...",
       "metadata": "{...}", // JSON-encoded metadata
       "score": 12.5 // higher = more relevant
+    }
+  ]
+}
+```
+
+#### Output (Hybrid Search)
+
+```jsonc
+{
+  "results": [
+    {
+      "id": 11716,
+      "content": "CREATE INDEX ...",
+      "metadata": "{...}", // JSON-encoded metadata
+      "rrf_score": 0.0328 // higher = more relevant; RRF of semantic + keyword ranks
     }
   ]
 }
