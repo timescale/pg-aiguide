@@ -114,4 +114,29 @@ describe('rrf()', () => {
     });
     expect(top[0]?.rrf_score).toBeCloseTo(1 / (k + 1), 10);
   });
+
+  test('duplicate ids in a rank list accumulate score but each id appears once in output', () => {
+    const k = DEFAULT_RRF_K;
+    const top = rrf({
+      semanticIds: [10, 10, 11],
+      keywordIds: [],
+      semanticWeight: 1,
+      limit: 10,
+    });
+    const ids = top.map((t) => t.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual([10, 11]);
+
+    const scoreWithDuplicateRank = top.find((t) => t.id === 10)?.rrf_score;
+    const scoreSingleRank1 =
+      rrf({
+        semanticIds: [10, 11],
+        keywordIds: [],
+        semanticWeight: 1,
+        limit: 10,
+      }).find((t) => t.id === 10)?.rrf_score ?? 0;
+
+    expect(scoreWithDuplicateRank).toBeCloseTo(1 / (k + 1) + 1 / (k + 2), 10);
+    expect(scoreWithDuplicateRank).toBeGreaterThan(scoreSingleRank1);
+  });
 });
