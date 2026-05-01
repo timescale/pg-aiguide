@@ -15,6 +15,60 @@ from ingest.types import Chunk, Page, PageSource
 from ingest.utils.chunking import chunk_markdown_lines
 from psycopg.sql import SQL, Identifier
 
+# Strict allow-list pattern for CREATE INDEX statements returned by
+# pg_get_indexdef(). PostgreSQL renders these in a canonical form like:
+#   CREATE [UNIQUE] INDEX <name> ON <schema>.<table> [USING <method>] (...)
+# We re-execute these strings verbatim in finalize_database(), so we must
+# refuse anything that does not match the expected shape and target table.
+# This guards against a second-order SQL injection where a malicious or
+# unexpected index definition stored in the catalog (e.g. by a user with
+# DDL access) would otherwise be executed with the importer's privileges.
+_INDEX_DEF_RE = re.compile(
+    r"""
+    ^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+      # CREATE [UNIQUE] INDEX
+    (?:IF\s+NOT\s+EXISTS\s+)?
+    "?[A-Za-z_][A-Za-z0-9_]*"?\s+            # index name (optionally quoted)
+    ON\s+
+    (?:"?docs"?\.)?"?(?P<table>[A-Za-z_][A-Za-z0-9_]*)"?  # [docs.]<table>
+    \s+
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def _validate_index_def(index_def: str, expected_table: str) -> str:
+    """Validate that ``index_def`` is a CREATE INDEX targeting ``expected_table``.
+
+    Returns the original string on success; raises :class:`ValueError`
+    otherwise. Rejects stacked statements (semicolons outside the trailing
+    terminator) so a crafted catalog entry cannot smuggle additional SQL.
+    """
+    if not isinstance(index_def, str):
+        raise ValueError(f"Unexpected index definition type: {type(index_def)!r}")
+
+    # Strip a single trailing semicolon if present, then ensure no further
+    # statement separators remain.
+    stripped = index_def.strip().rstrip(";").strip()
+    if ";" in stripped:
+        raise ValueError(
+            f"Refusing to execute multi-statement index definition: {index_def!r}"
+        )
+
+    match = _INDEX_DEF_RE.match(stripped)
+    if not match:
+        raise ValueError(
+            f"Index definition does not match expected CREATE INDEX shape: {index_def!r}"
+        )
+
+    target_table = match.group("table")
+    if target_table != expected_table:
+        raise ValueError(
+            "Index definition targets unexpected table "
+            f"{target_table!r} (expected {expected_table!r}): {index_def!r}"
+        )
+
+    return stripped
+
 
 class DocumentImporter(ABC):
     def __init__(self, version: str | int, pages_table: str, chunks_table: str):
@@ -131,7 +185,10 @@ class DocumentImporter(ABC):
         print("Initializing database tables...")
 
         # Capture existing index definitions so we can recreate them after swap.
-        self._index_defs_to_create = [
+        # Each definition is validated against a strict allow-list before being
+        # stored, so finalize_database() can never execute an unexpected
+        # statement even if the catalog is tampered with between the two phases.
+        raw_index_defs = [
             row[0]
             for row in conn.execute(
                 """
@@ -143,6 +200,9 @@ class DocumentImporter(ABC):
                 """,
                 [self.chunks_table],
             ).fetchall()
+        ]
+        self._index_defs_to_create = [
+            _validate_index_def(d, self.chunks_table) for d in raw_index_defs
         ]
 
         conn.execute(f"DROP TABLE IF EXISTS docs.{self.chunks_table}_tmp CASCADE")
@@ -203,7 +263,11 @@ class DocumentImporter(ABC):
             )
 
             for index_def in self._index_defs_to_create:
-                cur.execute(index_def)
+                # Re-validate just before execution as defence in depth: the
+                # list is only ever populated through _validate_index_def in
+                # init_database(), but we don't want to depend on that
+                # invariant if the class is subclassed or refactored.
+                cur.execute(_validate_index_def(index_def, self.chunks_table))
 
             for table in [self.pages_table, self.chunks_table]:
                 cur.execute(
