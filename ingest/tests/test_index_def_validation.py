@@ -9,7 +9,6 @@ SQL or target a table other than the importer's own chunks table.
 from __future__ import annotations
 
 import pytest
-
 from ingest.document_importer import _validate_index_def
 
 
