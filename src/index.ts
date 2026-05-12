@@ -14,7 +14,7 @@ cliEntrypoint(
   join(__dirname, 'httpServer.js'),
   undefined,
   {
-    schema: schema,
+    schema,
     serviceName: serverInfo.name,
   },
 ).catch(console.error);
