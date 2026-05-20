@@ -29,6 +29,7 @@ When you need continuous operation, promote any database to a **dedicated instan
 Additional features:
 - **CLI and MCP native:** create and query databases from the terminal or any MCP-compatible agent
 - **Instant forking:** full database copies in seconds for safe experimentation
+- **Shareable snapshots:** share a database snapshot via URL — anyone with the link can spin up their own copy in their own space
 - **MCP read-only mode:** `ghost config set read_only true` locks all MCP tools into read-only — SQL queries execute in read-only mode and destructive tools (`ghost_delete`, `ghost_password`, `ghost_rename`) are blocked
 
 Website: https://ghost.build
@@ -65,6 +66,7 @@ sudo yum install ghost
 
 ## Getting Started
 
+**CLI**
 ```bash
 ghost login                     # Authenticate with GitHub
 ghost create                    # Create a new database (returns an ID, e.g. abc123)
@@ -72,10 +74,19 @@ ghost list                      # List all databases with their IDs
 ghost connect <id>              # Get connection string
 ```
 
+**MCP**
+```
+ghost_login()                   // Authenticate with GitHub
+ghost_create({ name: "my-db" }) // → returns { id: "abc123", ... }
+ghost_list()                    // List all databases with their IDs
+ghost_connect({ id: "abc123" }) // Get connection string
+```
+
 ## Core Workflows
 
 ### Create and Query a Database
 
+**CLI**
 ```bash
 # Create a database (returns an ID like abc123)
 ghost create --name my-app-db
@@ -90,10 +101,23 @@ ghost sql abc123 "SELECT * FROM users"
 ghost psql abc123
 ```
 
+**MCP**
+```
+ghost_create({ name: "my-app-db" })
+// → returns { id: "abc123", ... }
+
+ghost_sql({ id: "abc123", query: "CREATE TABLE users (id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, email TEXT NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL DEFAULT now())" })
+
+ghost_sql({ id: "abc123", query: "SELECT * FROM users" })
+```
+
 ### Fork for Safe Experimentation
 
 Forking creates a full copy of your database in seconds — same schema, same data. Use forks to test migrations, experiment with schema changes, or let agents explore without risk to your working database.
 
+For a complete migration testing workflow using forks — including pre/post validation queries and rollback planning — see the `postgres-database-migration` skill.
+
+**CLI**
 ```bash
 # Fork a database (returns the fork's ID, e.g. def456)
 ghost fork abc123 --name my-app-db-experiment
@@ -108,47 +132,93 @@ ghost sql abc123 "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'
 ghost delete def456 --confirm
 ```
 
+**MCP**
+```
+ghost_fork({ id: "abc123", name: "my-app-db-experiment" })
+// → returns { id: "def456", ... }
+
+ghost_sql({ id: "def456", query: "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'" })
+
+// If it worked: apply to original
+ghost_sql({ id: "abc123", query: "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'" })
+
+// If it failed: delete the fork, original is untouched
+ghost_delete({ id: "def456" })
+```
+
 ### Auto-Pause and Resume
 
 Databases automatically pause after 30 days of idle time to conserve compute hours. Storage is retained. Resume a paused database when you need it again:
 
+**CLI**
 ```bash
 ghost resume abc123 --wait
 ```
 
+**MCP**
+```
+ghost_resume({ id: "abc123" })
+```
+
 ### Inspect Schema
 
+**CLI**
 ```bash
 ghost schema abc123
 ```
 
+**MCP**
+```
+ghost_schema({ id: "abc123" })
+```
+
 Returns an LLM-optimized schema representation of all tables, columns, indexes, and constraints.
+
+### Share a Database
+
+Sharing creates a snapshot anyone can use to spin up their own copy — no access to your space required. Useful for sharing sample datasets, bug reproductions, or starter databases.
+
+Agents can also use shares as a way to pass databases as assets: an agent can produce a database as output by sharing it (handing the recipient a URL to spin up their own copy), or accept a share token as input to start from a pre-populated database.
+
+**CLI**
+```bash
+# Share a database (returns a share URL)
+ghost share abc123
+
+# Share with an expiry
+ghost share abc123 --expires 24h
+
+# Recipient creates their own database from the share token
+ghost create --from-share <token>
+
+# Manage shares
+ghost share list abc123
+ghost share revoke <token>
+```
+
+**MCP**
+```
+ghost_share({ name_or_id: "abc123" })
+// → returns { share_token: "...", url: "..." }
+
+ghost_share({ name_or_id: "abc123", expires: "24h" })
+
+// Recipient creates their own database from the share token
+ghost_create({ from_share: "<token>" })
+
+// Manage shares
+ghost_share_list()
+ghost_share_revoke({ share_token: "<token>" })
+```
 
 ## CLI Command Reference
 
-| Command | Description |
-|---------|-------------|
-| `ghost create` | Create a new database (`--name`, `--wait`, `--json`) |
-| `ghost delete` | Delete a database (`--confirm` to skip prompt) |
-| `ghost fork` | Fork a database (`--name`, `--wait`, `--json`) |
-| `ghost connect` | Get connection string (`--read-only` for read-only connections) |
-| `ghost sql` | Execute SQL query (supports stdin: `cat query.sql \| ghost sql <db>`) |
-| `ghost schema` | Display database schema |
-| `ghost list` | List all databases (`--json`, `--yaml`) |
-| `ghost status` | Show space usage |
-| `ghost resume` | Resume a paused database (`--wait`) |
-| `ghost password` | Reset password (`--generate` for auto-generated) |
-| `ghost rename` | Rename a database |
-| `ghost logs` | View database logs |
-| `ghost psql` | Open interactive psql session (`--read-only`) |
-| `ghost login` | Authenticate with GitHub OAuth (`--headless` for CI) |
-| `ghost logout` | Remove stored credentials |
-| `ghost api-key` | Manage API keys for programmatic access |
-| `ghost config` | Manage CLI configuration (e.g., `ghost config set read_only true`) |
-| `ghost mcp` | Install and manage the Ghost MCP server |
-| `ghost feedback` | Submit feedback, bug reports, or support requests |
-| `ghost version` | Show version information |
-| `ghost completion` | Generate shell autocompletion scripts |
+For a full list of commands and flags, run:
+
+```bash
+ghost --help
+ghost <command> --help   # e.g. ghost create --help
+```
 
 ## MCP Integration
 
@@ -157,7 +227,7 @@ The Ghost MCP server gives agents full database lifecycle control — create, fo
 ### Install the MCP Server
 
 ```bash
-ghost mcp install               # Auto-detects your agent (Claude Code, Cursor, etc.)
+ghost mcp install 
 ```
 
 Supports: Claude Code, Cursor, Windsurf, Codex, Gemini, VS Code, Kiro.
@@ -172,28 +242,6 @@ ghost config set read_only true
 
 This locks all MCP tools into read-only: `ghost_sql` executes queries in read-only mode, and destructive tools (`ghost_delete`, `ghost_password`, `ghost_rename`) are blocked entirely.
 
-### MCP Tools
-
-Once running, agents have access to these tools:
-
-| Tool | Description |
-|------|-------------|
-| `ghost_create` | Create a database |
-| `ghost_delete` | Delete a database |
-| `ghost_fork` | Fork a database |
-| `ghost_connect` | Get connection string |
-| `ghost_sql` | Execute SQL query |
-| `ghost_schema` | Display database schema |
-| `ghost_list` | List all databases |
-| `ghost_status` | Show space usage |
-| `ghost_resume` | Resume a paused database |
-| `ghost_password` | Reset password |
-| `ghost_rename` | Rename a database |
-| `ghost_logs` | View logs |
-| `ghost_login` | Authenticate with GitHub OAuth |
-| `ghost_feedback` | Submit feedback |
-| `search_docs` | Search Ghost and Postgres documentation |
-| `view_skill` | View documentation for a specific topic |
 
 ## When to Use Ghost
 
