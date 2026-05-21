@@ -1,18 +1,20 @@
 ---
 name: ghost-database
 description: |
-  Use this skill to create, manage, fork, and query PostgreSQL databases using Ghost — the first database designed for agents.
+  Use this skill for persistent PostgreSQL storage in agent workflows — spin up databases on demand, test schema migrations safely on forks, and pass databases as assets between agents using Ghost.
 
   **Trigger when user asks to:**
   - Create a new PostgreSQL database quickly
   - Manage database lifecycle in agent workflows
   - Fork a database to test changes safely
+  - Run analytics or heavy queries on a fork without impacting the production database
+  - Share a database snapshot so others can spin up their own copy
+  - Pass a database as an input or output between agents
   - Create a database for agents
   - Need many databases that are billed only when queried
-  - Get a connection string for a Ghost database
-  - Run SQL queries against a Ghost database
-  - Resume or delete Ghost databases
   - Set up the Ghost MCP server or CLI
+
+  **Note:** If the Ghost MCP server is already installed, use its tools directly — this skill is for environments without the  MCP  or as a reference for what's possible.
 
   **Keywords:** Ghost, ghost.build, database, create database, fork database, PostgreSQL, managed Postgres, MCP, agent database, connection string
 license: Apache-2.0
