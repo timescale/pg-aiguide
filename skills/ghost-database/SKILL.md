@@ -22,7 +22,7 @@ metadata:
 
 # Ghost Database Management
 
-Ghost is a managed PostgreSQL service designed for agents. Your account is organized into Spaces, each with unlimited databases and forks sharing a pool of compute hours (billed in 15-minute chunks when queries are executed). Free tier: 100 hours/month, 1TB storage.
+Ghost is a managed PostgreSQL service designed for agents. Your account is organized into Spaces, each with unlimited on-demand databases and forks sharing a pool of compute hours (billed in 15-minute chunks when queries are executed). Free tier: 100 hours/month, 1TB storage.
 
 When you need continuous operation, promote any database to a **dedicated instance** — a separately billed, always-on database.
 
@@ -113,7 +113,7 @@ ghost_sql({ id: "abc123", query: "SELECT * FROM users" })
 
 ### Fork for Safe Experimentation
 
-Forking creates a full copy of your database in seconds — same schema, same data. Use forks to test migrations, experiment with schema changes, or let agents explore without risk to your working database.
+Forking creates a full copy of your database in seconds — same schema, same data. Use forks to test migrations, experiment with schema changes, or let agents explore without risk to your working database. You can fork a dedicated instance into an on-demand instance — useful for testing against a production copy without paying for always-on compute.
 
 For a complete migration testing workflow using forks — including pre/post validation queries and rollback planning — see the `postgres-database-migration` skill.
 
