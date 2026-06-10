@@ -10,7 +10,11 @@ if [ ! -f "$bunCmd" ]; then
     if [ "$version" != "latest" ]; then
         bashArgs=(-s "$version")
     fi
-    curl -fsSL https://bun.sh/install | BUN_INSTALL="$downloadDir" bash "${bashArgs[@]}"
+    # Override SHELL so the installer's `case $(basename "$SHELL")` falls through
+    # to its default branch, which only prints manual instructions instead of
+    # appending BUN_INSTALL/PATH exports to ~/.bashrc (or .zshrc / config.fish).
+    # We invoke bun via its explicit path, so we don't need those PATH edits.
+    curl -fsSL https://bun.sh/install | SHELL="" BUN_INSTALL="$downloadDir" bash "${bashArgs[@]}"
 fi
 
 exec "$bunCmd" "$@"
