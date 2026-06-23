@@ -73,7 +73,7 @@ sudo yum install ghost
 ghost login                     # Authenticate with GitHub
 ghost create                    # Create a new database (returns an ID, e.g. abc123)
 ghost list                      # List all databases with their IDs
-ghost connect <id>              # Get connection string
+ghost connect <name-or-id>              # Get connection string
 ```
 
 **MCP**
@@ -81,7 +81,7 @@ ghost connect <id>              # Get connection string
 ghost_login()                   // Authenticate with GitHub
 ghost_create({ name: "my-db" }) // → returns { id: "abc123", ... }
 ghost_list()                    // List all databases with their IDs
-ghost_connect({ id: "abc123" }) // Get connection string
+ghost_connect({ name_or_id: "abc123" }) // Get connection string
 ```
 
 ## Core Workflows
@@ -91,9 +91,9 @@ ghost_connect({ id: "abc123" }) // Get connection string
 **CLI**
 ```bash
 # Create a database (returns an ID like abc123)
-ghost create --name my-app-db
+ghost create my-app-db
 
-# Run SQL directly (use the database ID)
+# Run SQL directly
 ghost sql abc123 "CREATE TABLE users (id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, email TEXT NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL DEFAULT now())"
 
 # Query it
@@ -108,9 +108,9 @@ ghost psql abc123
 ghost_create({ name: "my-app-db" })
 // → returns { id: "abc123", ... }
 
-ghost_sql({ id: "abc123", query: "CREATE TABLE users (id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, email TEXT NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL DEFAULT now())" })
+ghost_sql({ name_or_id: "abc123", query: "CREATE TABLE users (id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, email TEXT NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL DEFAULT now())" })
 
-ghost_sql({ id: "abc123", query: "SELECT * FROM users" })
+ghost_sql({ name_or_id: "abc123", query: "SELECT * FROM users" })
 ```
 
 ### Fork for Safe Experimentation
@@ -122,30 +122,30 @@ For a complete migration testing workflow using forks — including pre/post val
 **CLI**
 ```bash
 # Fork a database (returns the fork's ID, e.g. def456)
-ghost fork abc123 --name my-app-db-experiment
+ghost fork abc123 my-app-db-experiment
 
 # Test changes on the fork
-ghost sql def456 "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"
+ghost sql my-app-db-experiment "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"
 
 # If it worked: apply to original
 ghost sql abc123 "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"
 
 # If it failed: delete the fork, original is untouched
-ghost delete def456 --confirm
+ghost delete my-app-db-experiment --confirm
 ```
 
 **MCP**
 ```
-ghost_fork({ id: "abc123", name: "my-app-db-experiment" })
+ghost_fork({ name_or_id: "abc123", name: "my-app-db-experiment" })
 // → returns { id: "def456", ... }
 
-ghost_sql({ id: "def456", query: "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'" })
+ghost_sql({ name_or_id: "def456", query: "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'" })
 
 // If it worked: apply to original
-ghost_sql({ id: "abc123", query: "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'" })
+ghost_sql({ name_or_id: "abc123", query: "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'" })
 
 // If it failed: delete the fork, original is untouched
-ghost_delete({ id: "def456" })
+ghost_delete({ name_or_id: "def456" })
 ```
 
 ### Auto-Pause and Resume
@@ -159,7 +159,7 @@ ghost resume abc123 --wait
 
 **MCP**
 ```
-ghost_resume({ id: "abc123" })
+ghost_resume({ name_or_id: "abc123" })
 ```
 
 ### Inspect Schema
@@ -171,7 +171,7 @@ ghost schema abc123
 
 **MCP**
 ```
-ghost_schema({ id: "abc123" })
+ghost_schema({ name_or_id: "abc123" })
 ```
 
 Returns an LLM-optimized schema representation of all tables, columns, indexes, and constraints.
