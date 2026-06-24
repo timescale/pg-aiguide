@@ -194,20 +194,20 @@ export const searchDocsFactory: ApiFactory<
       passedSemanticWeight ?? SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT;
 
     if (semanticWeight === 0) {
-      const result = (await getDocChunkRows(chunkRowsCtx)) as KeywordResult[];
-      recordTopResultsOnSpan(result);
-      return { results: result };
+      const results = (await getDocChunkRows(chunkRowsCtx)) as KeywordResult[];
+      recordTopResultsOnSpan(results);
+      return { results };
     }
 
     if (semanticWeight === 1) {
       const searchParam = await embedQueryJson(query);
-      const result = (await getDocChunkRows({
+      const results = (await getDocChunkRows({
         ...chunkRowsCtx,
         semantic: true,
         searchParam,
       })) as SemanticResult[];
-      recordTopResultsOnSpan(result);
-      return { results: result };
+      recordTopResultsOnSpan(results);
+      return { results };
     }
 
     const hybridLimit = limit * SEARCH_DOCS_HYBRID_CANDIDATE_POOL_FACTOR;
@@ -241,7 +241,7 @@ export const searchDocsFactory: ApiFactory<
       });
     }
 
-    const results = top.map(({ id, rrf_score }) => {
+    const results: HybridResult[] = top.map(({ id, rrf_score }) => {
       const row = byId.get(id);
       if (!row) throw new Error(`Missing chunk row for id ${id}`);
       return {
@@ -252,9 +252,8 @@ export const searchDocsFactory: ApiFactory<
       };
     });
 
-    const hybridResults = results as HybridResult[];
-    recordTopResultsOnSpan(hybridResults);
-    return { results: hybridResults };
+    recordTopResultsOnSpan(results);
+    return { results };
   },
   pickResult: (r) => r.results,
 });
