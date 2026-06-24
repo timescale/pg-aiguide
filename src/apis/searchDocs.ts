@@ -1,4 +1,5 @@
 import { openai } from '@ai-sdk/openai';
+import { trace } from '@opentelemetry/api';
 import type { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
 import { embed } from 'ai';
 import { z } from 'zod';
@@ -105,6 +106,33 @@ const outputSchema = {
 
 type OutputSchema = InferSchema<typeof outputSchema>;
 
+type SearchResult = SemanticResult | KeywordResult | HybridResult;
+
+const SEARCH_DOCS_SPAN_TOP_RESULT_COUNT = 3;
+
+function getResultScore(result: SearchResult): number {
+  if ('rrf_score' in result) return result.rrf_score;
+  if ('score' in result) return result.score;
+  return result.distance;
+}
+
+/**
+ * Records the ids and scores of the top results onto the active span so the
+ * search outcome is observable in Logfire. The matched document content is
+ * intentionally excluded to keep span attributes small.
+ */
+function recordTopResultsOnSpan(results: SearchResult[]): void {
+  const span = trace.getActiveSpan();
+  if (!span) return;
+
+  const topResults = results
+    .slice(0, SEARCH_DOCS_SPAN_TOP_RESULT_COUNT)
+    .map((result) => ({ id: result.id, score: getResultScore(result) }));
+
+  span.setAttribute('search_docs.result_count', results.length);
+  span.setAttribute('search_docs.top_results', JSON.stringify(topResults));
+}
+
 async function embedQueryJson(query: string): Promise<string> {
   const { embedding } = await embed({
     model: openai.embedding('text-embedding-3-small'),
@@ -166,18 +194,20 @@ export const searchDocsFactory: ApiFactory<
       passedSemanticWeight ?? SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT;
 
     if (semanticWeight === 0) {
-      const result = await getDocChunkRows(chunkRowsCtx);
-      return { results: result as KeywordResult[] };
+      const result = (await getDocChunkRows(chunkRowsCtx)) as KeywordResult[];
+      recordTopResultsOnSpan(result);
+      return { results: result };
     }
 
     if (semanticWeight === 1) {
       const searchParam = await embedQueryJson(query);
-      const result = await getDocChunkRows({
+      const result = (await getDocChunkRows({
         ...chunkRowsCtx,
         semantic: true,
         searchParam,
-      });
-      return { results: result as SemanticResult[] };
+      })) as SemanticResult[];
+      recordTopResultsOnSpan(result);
+      return { results: result };
     }
 
     const hybridLimit = limit * SEARCH_DOCS_HYBRID_CANDIDATE_POOL_FACTOR;
@@ -222,7 +252,9 @@ export const searchDocsFactory: ApiFactory<
       };
     });
 
-    return { results: results as HybridResult[] };
+    const hybridResults = results as HybridResult[];
+    recordTopResultsOnSpan(hybridResults);
+    return { results: hybridResults };
   },
   pickResult: (r) => r.results,
 });
