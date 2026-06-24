@@ -11,8 +11,10 @@ description: |
   - Use PostGIS for spatial/geographic data
   - Set up TimescaleDB hypertables for time-series data
   - Migrate tables to hypertables or evaluate migration candidates
+  - Plan or execute safe schema migrations with zero downtime
+  - Create, fork, or manage databases with Ghost
 
-  **Keywords:** PostgreSQL, Postgres, SQL, schema, table design, indexes, constraints, pgvector, PostGIS, TimescaleDB, hypertable, semantic search, hybrid search, BM25, time-series
+  **Keywords:** PostgreSQL, Postgres, SQL, schema, table design, indexes, constraints, pgvector, PostGIS, TimescaleDB, hypertable, semantic search, hybrid search, BM25, time-series, migration, Ghost
 license: Apache-2.0
 metadata:
   author: tigerdata
@@ -36,6 +38,12 @@ This skill provides comprehensive PostgreSQL expertise through specialized refer
 - **[setup-timescaledb-hypertables](references/setup-timescaledb-hypertables.md)** — Hypertable creation, compression, retention policies, continuous aggregates, and indexes. **Use when setting up TimescaleDB from scratch.**
 - **[find-hypertable-candidates](references/find-hypertable-candidates.md)** — SQL queries to analyze existing tables and score them for hypertable conversion. **Use when evaluating which tables to migrate.**
 - **[migrate-postgres-tables-to-hypertables](references/migrate-postgres-tables-to-hypertables.md)** — Step-by-step migration: partition column selection, in-place vs blue-green, validation. **Use when executing a migration.**
+
+### Migrations
+- **[postgres-database-migration](references/postgres-database-migration.md)** — DDL lock reference, safe migration patterns, timeout strategies, rollback planning, and fork-based testing. **Use when planning or executing schema changes on production databases.**
+
+### Database Management
+- **[ghost-database](references/ghost-database.md)** — Ghost is a managed PostgreSQL service designed for AI agents. Create, fork, pause, resume, and query databases via CLI or MCP. **Use when the user needs a database for agent workflows or wants to fork for safe experimentation.**
 
 ## How to Use
 
