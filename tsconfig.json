@@ -3,6 +3,7 @@
     "outDir": "./dist",
     "rootDir": "./",
     "target": "ESNext",
+    "types": ["bun"],
     "module": "Preserve",
     "moduleResolution": "bundler",
     "verbatimModuleSyntax": true,
