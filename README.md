@@ -272,6 +272,20 @@ Coming soon:
 
 We welcome contributions for additional extensions and tools.
 
+## Evals and production telemetry
+
+The `evals/postgres-aiguide/` directory contains a small human-review eval set
+for schema design, migration review, and query-performance workflows. The cases
+are harness-neutral so they can be used before releasing changes to the skills,
+Claude Code plugin, MCP server, or another agent integration.
+
+If you publish this plugin through Telvine, keep runtime telemetry metadata-only:
+`skill.invocation.start`, `skill.invocation.end`, and `skill.invocation.error`
+for skill behavior, plus `plugin.component.invoked` and
+`plugin.component.error` for MCP or other non-skill components. Do not emit SQL
+text from private systems, result rows, schema dumps, credentials, connector
+payloads, tool arguments, or model outputs.
+
 ## 🛠 Development
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for:
