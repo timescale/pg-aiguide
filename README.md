@@ -132,6 +132,19 @@ codex mcp add --url "https://mcp.tigerdata.com/docs" pg-aiguide
 </details>
 
 <details>
+<summary> Autohand Code </summary>
+
+Run the following to add the MCP server to [Autohand Code](https://github.com/autohandai/code-cli/):
+
+```bash
+autohand mcp add --transport http pg-aiguide https://mcp.tigerdata.com/docs
+```
+
+Add `--scope project` to keep the registration in the current workspace.
+
+</details>
+
+<details>
 <summary> Cursor </summary>
 
 One-click install:
