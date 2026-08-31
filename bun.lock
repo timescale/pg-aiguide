@@ -7,7 +7,7 @@
       "dependencies": {
         "@ai-sdk/openai": "4.0.0",
         "@opentelemetry/api": "^1.9.1",
-        "@tigerdata/mcp-boilerplate": "1.5.0",
+        "@tigerdata/mcp-boilerplate": "1.6.4",
         "ai": "7.0.2",
         "dotenv": "^17.4.2",
         "gray-matter": "^4.0.3",
@@ -576,7 +576,7 @@
 
     "@tailwindcss/vite": ["@tailwindcss/vite@4.2.1", "", { "dependencies": { "@tailwindcss/node": "4.2.1", "@tailwindcss/oxide": "4.2.1", "tailwindcss": "4.2.1" }, "peerDependencies": { "vite": "^5.2.0 || ^6 || ^7" } }, "sha512-TBf2sJjYeb28jD2U/OhwdW0bbOsxkWPwQ7SrqGf9sVcoYwZj7rkXljroBO9wKBut9XnmQLXanuDUeqQK0lGg/w=="],
 
-    "@tigerdata/mcp-boilerplate": ["@tigerdata/mcp-boilerplate@1.5.0", "", { "dependencies": { "@mcp-use/inspector": "^10.0.1", "@modelcontextprotocol/sdk": "^1.29.0", "@opentelemetry/api": "^1.9.1", "@opentelemetry/auto-instrumentations-node": "^0.77.0", "@opentelemetry/exporter-trace-otlp-grpc": "^0.219.0", "@opentelemetry/instrumentation-http": "^0.219.0", "@opentelemetry/sdk-metrics": "^2.8.0", "@opentelemetry/sdk-node": "^0.219.0", "@opentelemetry/sdk-trace-node": "^2.8.0", "@opentelemetry/semantic-conventions": "^1.41.1", "@toon-format/toon": "^2.3.0", "express": "^5.2.1", "gray-matter": "^4.0.3", "raw-body": "^3.0.2", "yaml": "^2.9.0" }, "peerDependencies": { "migrate": "^2.1.0", "pg": "^8.16.3", "zod": "^3.25 || ^4.0" }, "optionalPeers": ["migrate", "pg"] }, "sha512-wD8eS08uElq4fwrKV3sLO/g0G9+HNLyeqVm/haHXUcnPQ34D+lgN/ooGIPBq4J8nVVYmWsbvIUv3tJUw+JzxRQ=="],
+    "@tigerdata/mcp-boilerplate": ["@tigerdata/mcp-boilerplate@1.6.4", "", { "dependencies": { "@mcp-use/inspector": "^10.0.1", "@modelcontextprotocol/sdk": "^1.29.0", "@opentelemetry/api": "^1.9.1", "@opentelemetry/auto-instrumentations-node": "^0.77.0", "@opentelemetry/exporter-trace-otlp-grpc": "^0.219.0", "@opentelemetry/instrumentation-http": "^0.219.0", "@opentelemetry/sdk-metrics": "^2.8.0", "@opentelemetry/sdk-node": "^0.219.0", "@opentelemetry/sdk-trace-node": "^2.8.0", "@opentelemetry/semantic-conventions": "^1.41.1", "@toon-format/toon": "^2.3.0", "express": "^5.2.1", "gray-matter": "^4.0.3", "raw-body": "^3.0.2", "yaml": "^2.9.0" }, "peerDependencies": { "migrate": "^2.1.0", "pg": "^8.16.3", "zod": "^3.25 || ^4.0" }, "optionalPeers": ["migrate", "pg"] }, "sha512-BBlymZ0RLSye5mLeBrjrwnETenk+5tCNrBljsory7ISQG9zUjI4ejmgqHJ5fonvJVR03iezjBiGDGGw3gXAx1w=="],
 
     "@toon-format/toon": ["@toon-format/toon@2.3.0", "", {}, "sha512-/Ew9etdRQKVMnm9fDaCG0JjyAOK/O7T0M97oum1aW4W+UR8ZhVVPBanIV7oWgHBiGlnVxV9M55PWQCHofDV07w=="],
 
