@@ -26,6 +26,7 @@ from ingest.utils.beautiful_soup import (
     fetch_page_as_soup,
     get_postgis_page_urls,
     postgis_html_to_markdown,
+    resolve_relative_urls,
 )
 from ingest.utils.db import build_database_uri
 
@@ -57,6 +58,7 @@ class PostGISDocsImporter(DocumentImporter):
 
             title = extract_title(soup, fallback="PostGIS Documentation")
             soup = clean_postgis_html(soup)
+            resolve_relative_urls(soup, full_url)
             markdown = postgis_html_to_markdown(soup)
 
             page = Page(

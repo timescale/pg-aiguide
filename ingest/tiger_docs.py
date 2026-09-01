@@ -18,6 +18,7 @@ from ingest.constants import (
     OPENAI_API_KEY,
     OPENAI_BASE_URL,
 )
+from ingest.utils.beautiful_soup import resolve_relative_urls
 from ingest.utils.db import build_database_uri
 from langchain_text_splitters import (
     MarkdownHeaderTextSplitter,
@@ -41,6 +42,9 @@ with open(os.path.join(script_dir, "tiger_docs_config.toml"), "rb") as config_fp
     config = tomllib.load(config_fp)
     DOMAIN_SELECTORS = config["domain_selectors"]
     DEFAULT_SELECTORS = config["default_selectors"]
+
+# Matches an ATX markdown header line and captures its text.
+_MARKDOWN_HEADER_PATTERN = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
 
 
 def add_header_breadcrumbs_to_content(content, metadata):
@@ -667,23 +671,27 @@ class SitemapMarkdownSpider(SitemapSpider):
 
         return soup
 
-    def extract_anchor_links(self, text):
-        """Extract markdown anchor links from text (only internal #anchors)"""
-        import re
+    def extract_heading_anchors(self, soup):
+        """Map heading text to its anchor id, for h1 to h3 headings.
 
-        # Pattern to match markdown links that are internal anchors: [text](#anchor)
-        anchor_pattern = r"\[([^\]]+)\]\(#([^)]+)\)"
+        The markdown headers keep only the text, so this map lets a chunk find
+        the anchor of the section that it came from. The first heading wins when
+        two headings have the same text.
+        """
+        heading_anchors = {}
+        for heading in soup.find_all(["h1", "h2", "h3"]):
+            anchor = heading.get("id")
+            text = heading.get_text(strip=True)
+            if anchor and text and text not in heading_anchors:
+                heading_anchors[text] = anchor
+        return heading_anchors
 
-        anchors = []
-        for match in re.finditer(anchor_pattern, text):
-            link_text = match.group(1)
-            anchor_id = match.group(2)
+    def section_url(self, url, header_text, heading_anchors):
+        """Add the section anchor to url when the heading anchor is known."""
+        anchor = heading_anchors.get(header_text) if header_text else None
+        return f"{url}#{anchor}" if anchor else url
 
-            anchors.append({"text": link_text, "anchor": anchor_id})
-
-        return anchors
-
-    def semantic_chunk_with_openai(self, markdown_text, url):
+    def semantic_chunk_with_openai(self, markdown_text, url, heading_anchors):
         """Use OpenAI to identify semantic boundaries for chunking using split identifiers"""
         try:
             # Initialize OpenAI client
@@ -772,25 +780,21 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
                         # Join lines back with newlines
                         chunk_content = "\n".join(current_chunk_lines)
 
-                        # Extract anchor links from chunk content
-                        content_anchors = self.extract_anchor_links(chunk_content)
-
-                        # Create metadata
+                        # Link to the last section that starts inside this chunk
+                        headers_in_chunk = _MARKDOWN_HEADER_PATTERN.findall(
+                            chunk_content
+                        )
                         chunk_metadata = {
-                            "source_url": url,
+                            "source_url": self.section_url(
+                                url,
+                                headers_in_chunk[-1] if headers_in_chunk else None,
+                                heading_anchors,
+                            ),
                             "chunk_index": len(final_chunks),
                             "sub_chunk_index": 0,
                             "chunking_method": "semantic_openai",
                             "line_range": f"{i - len(current_chunk_lines) + 1}-{i}",
                         }
-
-                        # Add anchor information to metadata
-                        if content_anchors:
-                            chunk_metadata["anchor_links"] = content_anchors
-                            chunk_metadata["anchor_count"] = len(content_anchors)
-                            chunk_metadata["anchor_ids"] = [
-                                a["anchor"] for a in content_anchors
-                            ]
 
                         final_chunks.append(
                             {"content": chunk_content, "metadata": chunk_metadata}
@@ -805,7 +809,7 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
         except Exception as e:
             raise RuntimeError(f"OpenAI semantic chunking failed for {url}: {e}")
 
-    def chunk_markdown_content_header_based(self, markdown_text, url):
+    def chunk_markdown_content_header_based(self, markdown_text, url, heading_anchors):
         """Original header-based chunking method"""
         chunks = []
 
@@ -835,15 +839,21 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
         for i, doc in enumerate(header_splits):
             # Get the header metadata
             metadata = doc.metadata.copy() if hasattr(doc, "metadata") else {}
-            metadata["source_url"] = url
             metadata["chunk_index"] = i
             metadata["chunking_method"] = "header_based"
 
-            # Extract anchor links from headers (breadcrumb context)
-            header_anchors = []
-            for level in ["Header 1", "Header 2", "Header 3"]:
-                if level in metadata:
-                    header_anchors.extend(self.extract_anchor_links(metadata[level]))
+            # Link to the deepest section that contains this chunk
+            deepest_header = next(
+                (
+                    metadata[level]
+                    for level in ["Header 3", "Header 2", "Header 1"]
+                    if level in metadata
+                ),
+                None,
+            )
+            metadata["source_url"] = self.section_url(
+                url, deepest_header, heading_anchors
+            )
 
             # Split large chunks further
             sub_chunks = text_splitter.split_text(doc.page_content)
@@ -852,37 +862,19 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
                 chunk_metadata = metadata.copy()
                 chunk_metadata["sub_chunk_index"] = j
 
-                # Extract anchor links from chunk content
-                content_anchors = self.extract_anchor_links(chunk_text)
-
-                # Combine header and content anchors, removing duplicates
-                all_anchors = header_anchors + content_anchors
-                unique_anchors = []
-                seen_anchors = set()
-                for anchor in all_anchors:
-                    anchor_key = (anchor["text"], anchor["anchor"])
-                    if anchor_key not in seen_anchors:
-                        unique_anchors.append(anchor)
-                        seen_anchors.add(anchor_key)
-
-                # Add anchor information to metadata
-                if unique_anchors:
-                    chunk_metadata["anchor_links"] = unique_anchors
-                    chunk_metadata["anchor_count"] = len(unique_anchors)
-                    # Also create a simple list of anchor IDs for easier searching
-                    chunk_metadata["anchor_ids"] = [a["anchor"] for a in unique_anchors]
-
                 chunks.append({"content": chunk_text, "metadata": chunk_metadata})
 
         self.logger.debug(f"Created {len(chunks)} chunks using header-based method")
         return chunks
 
-    def chunk_markdown_content(self, markdown_text, url):
+    def chunk_markdown_content(self, markdown_text, url, heading_anchors):
         """Route to appropriate chunking method based on configuration"""
         if self.chunking_method == "semantic":
-            return self.semantic_chunk_with_openai(markdown_text, url)
+            return self.semantic_chunk_with_openai(markdown_text, url, heading_anchors)
         else:  # Default to header-based
-            return self.chunk_markdown_content_header_based(markdown_text, url)
+            return self.chunk_markdown_content_header_based(
+                markdown_text, url, heading_anchors
+            )
 
     def sitemap_filter(self, entries):
         """Filter sitemap entries to only include HTML pages under the url_prefix"""
@@ -940,6 +932,11 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
             if self.should_strip_data_images:
                 soup = self.strip_data_images(soup)
 
+            # Resolve relative links and images to fully-qualified URLs
+            urls_resolved = resolve_relative_urls(soup, url)
+            if urls_resolved > 0:
+                self.logger.debug(f"Resolved {urls_resolved} relative URLs")
+
             # Convert callout divs to admonitions
             soup = self.convert_callouts_to_admonitions(soup)
 
@@ -948,6 +945,10 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
 
             # Find main content
             main_content = soup.find("main") or soup
+
+            # Collect heading anchors before the markdown conversion drops them
+            heading_anchors = self.extract_heading_anchors(main_content)
+
             html_content = str(main_content)
 
             # Convert to markdown
@@ -959,7 +960,9 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
 
             if self.should_chunk_content:
                 # Chunk the content
-                chunks = self.chunk_markdown_content(markdown_output, url)
+                chunks = self.chunk_markdown_content(
+                    markdown_output, url, heading_anchors
+                )
 
                 if self.db_manager is not None:
                     # Save to database

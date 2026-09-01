@@ -30,6 +30,31 @@ POSTGRES_ADMONITION_CLASSES = [
 ]
 
 
+# Tags whose URL attribute is made fully qualified during ingest.
+_URL_ATTRS_BY_TAG = {"a": "href", "img": "src"}
+
+
+def resolve_relative_urls(soup: BeautifulSoup, base_url: str) -> int:
+    """Rewrite relative <a href> and <img src> URLs to fully-qualified URLs.
+
+    Resolves each URL against base_url in place. Same-document references
+    (empty or fragment-only) stay as they are, because they must keep working
+    inside the page. Returns the number of URLs that changed.
+    """
+    resolved = 0
+    for tag_name, attr in _URL_ATTRS_BY_TAG.items():
+        for tag in soup.find_all(tag_name, attrs={attr: True}):
+            url = tag[attr]
+            # Keep same-document references relative.
+            if not url or url.startswith("#"):
+                continue
+            resolved_url = urljoin(base_url, url)
+            if resolved_url != url:
+                tag[attr] = resolved_url
+                resolved += 1
+    return resolved
+
+
 def clean_postgis_html(soup: BeautifulSoup) -> BeautifulSoup:
     """Remove navigation, scripts, styles, and data-URI images from PostGIS HTML."""
     for selector in POSTGIS_REMOVE_SELECTORS:
