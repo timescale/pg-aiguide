@@ -1,6 +1,6 @@
 #!/bin/bash
 
-version="bun-v1.3.14"
+version="bun-v1.4.0"
 downloadDir=$(pwd)/download/bun/${version}
 bunCmd="$downloadDir/bin/bun"
 
