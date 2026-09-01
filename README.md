@@ -145,6 +145,30 @@ gemini mcp add -s user pg-aiguide "https://mcp.tigerdata.com/docs" -t http
 </details>
 
 <details>
+<summary> OpenCode </summary>
+
+Add the following to your global OpenCode config file (`~/.config/opencode/opencode.json`), or to a
+project level `opencode.json`. See the [OpenCode config docs](https://opencode.ai/docs/config/) for
+more about file locations, and the [MCP server docs](https://opencode.ai/docs/mcp-servers/) for more
+about the `mcp` options.
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "pg-aiguide": {
+      "type": "remote",
+      "url": "https://mcp.tigerdata.com/docs"
+    }
+  }
+}
+```
+
+Add `use pg-aiguide` to your prompts to use the pg-aiguide tools.
+
+</details>
+
+<details>
 <summary> Visual Studio </summary>
 
 Click the button to install:
@@ -197,27 +221,6 @@ Add the following to `~/.codeium/windsurf/mcp_config.json`
   }
 }
 ```
-
-</details>
-
-<details>
-<summary> OpenCode </summary>
-
-Add the following to your OpenCode config file (`opencode.json`):
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "pg-aiguide": {
-      "type": "remote",
-      "url": "https://mcp.tigerdata.com/docs"
-    }
-  }
-}
-```
-
-Add `use pg-aiguide` to your prompts to use the pg-aiguide tools.
 
 </details>
 
