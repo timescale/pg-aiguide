@@ -44,7 +44,36 @@ After changing dependencies, commit the regenerated `uv.lock`, or `uv lock
 There is no type checker configured for this code. `ruff` is the only Python
 tool that CI enforces.
 
-## Running the ingest
+## Running the ingest in CI
+
+The `Ingest Docs` workflow ingests every source, and runs weekly on a schedule.
+To start it by hand, use the Actions tab or the CLI:
+
+```bash
+# Everything, dev and prod. Same as the weekly run.
+gh workflow run ingest-docs.yaml
+
+# One source, every version of it.
+gh workflow run ingest-docs.yaml -f source=postgres
+
+# Specific versions.
+gh workflow run ingest-docs.yaml -f source=postgres -f versions=17,18
+gh workflow run ingest-docs.yaml -f source=postgis -f versions=3.6
+
+# One environment only.
+gh workflow run ingest-docs.yaml -f source=tiger -f environment=dev
+```
+
+Ingests of one source overwrite each other's `_tmp` tables, so the workflow runs
+them one at a time (`max-parallel: 1`), and a `concurrency` group stops two runs
+of the workflow from overlapping. The dev and prod jobs run at the same time,
+because they write different databases. `fail-fast: false` means one bad version
+does not stop the rest.
+
+The version lists live in `.github/scripts/plan_ingest.py`. Keep them in step
+with the `source` enum in `src/apis/searchDocs.ts`.
+
+## Running the ingest locally
 
 ### PostgreSQL Documentation
 

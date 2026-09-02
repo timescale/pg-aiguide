@@ -1,0 +1,136 @@
+name: Ingest Docs
+run-name: >-
+  Ingest ${{ inputs.source || 'all' }}${{ inputs.versions && format(' {0}', inputs.versions) || '' }} docs${{ inputs.environment && inputs.environment != 'both' && format(' ({0} only)', inputs.environment) || '' }}
+
+on:
+  schedule:
+    # Refresh every source once a week.
+    - cron: "0 2 * * 0"
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "What to ingest"
+        type: choice
+        required: false
+        default: "all"
+        options:
+          - all
+          - tiger
+          - postgres
+          - postgis
+      versions:
+        description: "Versions, comma separated (e.g. 17 or 3.5,3.6). Empty means every version of the source. Not valid with 'all'."
+        type: string
+        required: false
+        default: ""
+      environment:
+        description: "Which databases to write"
+        type: choice
+        required: false
+        default: "both"
+        options:
+          - both
+          - dev
+          - prod
+
+# Ingests of one source overwrite each other's _tmp tables, so only one run of
+# this workflow may proceed at a time. The ingest also takes a database lock,
+# which covers runs started outside of Actions.
+concurrency:
+  group: ingest-docs
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan ingest matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build matrix
+        id: plan
+        run: |
+          matrix="$(python3 .github/scripts/plan_ingest.py \
+            --source '${{ inputs.source || 'all' }}' \
+            --versions '${{ inputs.versions }}')"
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+          echo "Planned ingest jobs:" >> "$GITHUB_STEP_SUMMARY"
+          echo "${matrix}" | python3 -c \
+            'import json,sys; [print("-", e["label"]) for e in json.load(sys.stdin)]' \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # Dev and prod write different databases, so they run at the same time. Each
+  # matrix runs one job at a time, which keeps the ingests of one database
+  # sequential.
+  ingest-dev:
+    name: Ingest ${{ matrix.label }} (dev)
+    needs: plan
+    if: ${{ (inputs.environment || 'both') != 'prod' }}
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.plan.outputs.matrix) }}
+    defaults:
+      run:
+        working-directory: ingest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      PGHOST: ${{ secrets.PGHOST }}
+      PGPORT: ${{ secrets.PGPORT }}
+      PGDATABASE: ${{ secrets.PGDATABASE }}
+      PGUSER: ${{ secrets.PGUSER }}
+      PGPASSWORD: ${{ secrets.PGPASSWORD }}
+    steps: &ingest-steps
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: ./ingest/.python-version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: ingest/uv.lock
+
+      - name: Install python dependencies
+        run: uv sync --no-dev
+
+      - name: Install system dependencies
+        # Only the Postgres docs are built from source with the docbook toolchain.
+        if: matrix.source == 'postgres'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docbook-xml docbook-xsl libxml2-utils xsltproc fop
+
+      - name: Ingest ${{ matrix.label }}
+        run: uv run python ${{ matrix.command }}
+        env:
+          PYTHONPATH: ..
+
+  ingest-prod:
+    name: Ingest ${{ matrix.label }} (prod)
+    needs: plan
+    if: ${{ (inputs.environment || 'both') != 'dev' }}
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.plan.outputs.matrix) }}
+    defaults:
+      run:
+        working-directory: ingest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      PGHOST: ${{ secrets.PROD_PGHOST }}
+      PGPORT: ${{ secrets.PROD_PGPORT }}
+      PGDATABASE: ${{ secrets.PROD_PGDATABASE }}
+      PGUSER: ${{ secrets.PROD_PGUSER }}
+      PGPASSWORD: ${{ secrets.PROD_PGPASSWORD }}
+    steps: *ingest-steps
