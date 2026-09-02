@@ -43,7 +43,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.11",
     "@types/bun": "^1.4.0",
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.4.0",
     "@types/pg": "^8.23.1",
     "@types/semver": "^7.8.0",
     "semver": "^7.8.5",
