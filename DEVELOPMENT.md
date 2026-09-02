@@ -111,6 +111,24 @@ PGPASSWORD=password
 
 Run `./bun i` to install dependencies and build the project. Use `./bun run watch http` to rebuild on changes.
 
+## TypeScript
+
+We compile with [TypeScript 7](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/),
+the native (Go) port, which is roughly 10x faster than 6.x. `tsc` (used by
+`build` and `typecheck`) is 7.x.
+
+TypeScript 7.0 ships **no programmatic API**, so if we ever add tooling that
+imports the compiler as a library (`typescript-eslint`, or editor language
+services for Vue/Svelte/Astro/MDX), it will need 6.x installed alongside. The
+release notes describe how to do that with npm aliases: 7.x under
+`@typescript/native` and 6.x under the `typescript` name that such tools resolve
+through. We don't need it today — nothing here imports the compiler API, and we
+lint with biome rather than eslint.
+
+VS Code needs the [TypeScript 7 extension](https://marketplace.visualstudio.com/items?itemName=TypeScriptTeam.native-preview)
+for the new language server; it discovers 7.x from `node_modules` automatically.
+Support is expected to ship in VS Code itself.
+
 ## Loading the Database
 
 The database is NOT preloaded with the documentation. To make the MCP server usable, you need to scrape, chunk, embed, load, and index the documentation.
