@@ -9,7 +9,11 @@
   "footer",
   "#plan-availability",
   ".sr-only",
-  ".code-block-copy-button"
+  ".code-block-copy-button",
+  # Breadcrumbs plus the "Copy Markdown" / "Open in Claude|ChatGPT|Cursor"
+  # action menu that sits above the page title. This is UI boilerplate that
+  # otherwise becomes the first chunk of nearly every page.
+  ".stl-page-nav-container"
 ]
 
 # PostGIS official documentation (postgis.net)
