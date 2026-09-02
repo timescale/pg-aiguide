@@ -13,6 +13,7 @@ from ingest.constants import (
 )
 from ingest.types import Chunk, Page, PageSource
 from ingest.utils.chunking import chunk_markdown_lines
+from ingest.utils.locking import acquire_ingest_lock
 from psycopg.sql import SQL, Identifier
 
 
@@ -128,6 +129,11 @@ class DocumentImporter(ABC):
 
     def init_database(self, conn: psycopg.Connection) -> None:
         """Set up _tmp tables, copying across any rows for other versions."""
+        # Hold the lock for the whole job. The _tmp tables have fixed names and
+        # get a copy of every other version, so an overlapping job for another
+        # version would discard the work of this one.
+        acquire_ingest_lock(conn, self.pages_table)
+
         print("Initializing database tables...")
 
         # Capture existing index definitions so we can recreate them after swap.

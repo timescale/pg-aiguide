@@ -20,6 +20,7 @@ from ingest.constants import (
 )
 from ingest.utils.beautiful_soup import resolve_relative_urls
 from ingest.utils.db import build_database_uri
+from ingest.utils.locking import acquire_ingest_lock
 from langchain_text_splitters import (
     MarkdownHeaderTextSplitter,
     RecursiveCharacterTextSplitter,
@@ -85,6 +86,10 @@ class DatabaseManager:
             raise RuntimeError(f"Database connection failed: {e}")
 
     def initialize(self):
+        # Hold the lock for the whole job, so a second scrape cannot drop the
+        # _tmp tables that this one is still filling.
+        acquire_ingest_lock(self.connection, "timescale_pages")
+
         with self.connection.cursor() as cursor:
             cursor.execute(
                 SQL("DROP TABLE IF EXISTS {schema}.timescale_chunks_tmp").format(

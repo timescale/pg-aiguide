@@ -9,6 +9,13 @@ on:
         required: true
         default: "3.6"
 
+# All versions stage into the same _tmp tables, so queue the runs instead of
+# letting them overlap. The ingest also takes a database lock, for the case of
+# a run that starts outside of this workflow.
+concurrency:
+  group: ingest-postgis-docs
+  cancel-in-progress: false
+
 jobs:
   ingest-dev:
     name: Ingest PostGIS docs for Dev
