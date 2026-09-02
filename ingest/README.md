@@ -41,6 +41,9 @@ workflows install with `uv sync --no-dev`.
 After changing dependencies, commit the regenerated `uv.lock`, or `uv lock
 --check` will fail in CI.
 
+There is no type checker configured for this code. `ruff` is the only Python
+tool that CI enforces.
+
 ## Running the ingest
 
 ### PostgreSQL Documentation
