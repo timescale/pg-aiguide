@@ -49,10 +49,14 @@ class PostGISDocsImporter(DocumentImporter):
         self.processed_urls: set[str] = set()
 
     def get_pages(self) -> Iterable[PageSource]:
-        for page_url in get_postgis_page_urls(self.session, self.base_url, self.max_pages):
+        for page_url in get_postgis_page_urls(
+            self.session, self.base_url, self.max_pages
+        ):
             print(f"\nProcessing: {page_url}")
             full_url = urljoin(self.base_url, page_url)
-            soup = fetch_page_as_soup(self.session, full_url, self.processed_urls, self.delay)
+            soup = fetch_page_as_soup(
+                self.session, full_url, self.processed_urls, self.delay
+            )
             if soup is None:
                 continue
 

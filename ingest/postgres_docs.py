@@ -9,8 +9,8 @@ from urllib.parse import quote
 
 import psycopg
 from bs4 import BeautifulSoup
-from ingest.document_importer import DocumentImporter, PageSource
 from ingest.constants import BUILD_DIR, POSTGRES_BASE_URL, THIS_DIR
+from ingest.document_importer import DocumentImporter, PageSource
 from ingest.types import Page
 from ingest.utils.beautiful_soup import (
     extract_postgres_page_metadata,
@@ -160,8 +160,8 @@ def build_markdown(version: int) -> None:
         soup = BeautifulSoup(html_content, "html.parser")
         try:
             title_text, slug, is_refentry = extract_postgres_page_metadata(soup)
-        except SystemError:
-            raise SystemError(f"No div with id found in {html_file}")
+        except SystemError as e:
+            raise SystemError(f"No div with id found in {html_file}") from e
 
         page_url = f"{POSTGRES_BASE_URL}/{version}/{html_file.name}"
         resolve_relative_urls(soup, page_url)

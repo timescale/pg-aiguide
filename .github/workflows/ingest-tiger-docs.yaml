@@ -37,9 +37,12 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: ingest/uv.lock
 
       - name: Install python dependencies
-        run: uv sync
+        run: uv sync --no-dev
 
       - name: Ingest Tiger docs
         run: uv run python tiger_docs.py

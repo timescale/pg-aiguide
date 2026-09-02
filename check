@@ -2,4 +2,16 @@
 set -e
 
 output=$(./bun --silent run check 2>&1) || { echo "$output"; exit 1; }
+
+# Python lint/format for the ingest scripts. Skipped with a warning when uv is
+# not installed, since most work in this repo does not touch ingest/.
+if command -v uv >/dev/null 2>&1; then
+  output=$(cd ingest && uv sync --quiet && uv run ruff format . && uv run ruff check --fix . 2>&1) || {
+    echo "$output"
+    exit 1
+  }
+else
+  echo "warning: uv not found, skipping python checks (see ingest/README.md)"
+fi
+
 echo ok

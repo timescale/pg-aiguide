@@ -83,7 +83,7 @@ class DatabaseManager:
         try:
             self.connection = psycopg.connect(self.database_uri)
         except Exception as e:
-            raise RuntimeError(f"Database connection failed: {e}")
+            raise RuntimeError(f"Database connection failed: {e}") from e
 
     def initialize(self):
         # Hold the lock for the whole job, so a second scrape cannot drop the
@@ -258,7 +258,7 @@ class DatabaseManager:
                 return page_id
 
         except Exception as e:
-            raise RuntimeError(f"Failed to save page {url}: {e}")
+            raise RuntimeError(f"Failed to save page {url}: {e}") from e
 
     def generate_embeddings_batch(self, texts):
         """Generate embeddings for a batch of texts using the configured embedding model"""
@@ -303,7 +303,7 @@ class DatabaseManager:
                 self.connection.cursor() as cursor,
                 self.connection.transaction() as _,
             ):
-                for chunk, embedding in zip(processed_chunks, embeddings):
+                for chunk, embedding in zip(processed_chunks, embeddings, strict=True):
                     cursor.execute(
                         SQL("""
                         INSERT INTO {schema}.timescale_chunks_tmp (page_id, chunk_index, sub_chunk_index, content, metadata, embedding)
@@ -330,7 +330,7 @@ class DatabaseManager:
                 )
 
         except Exception as e:
-            raise RuntimeError(f"Failed to save chunks for page {page_id}: {e}")
+            raise RuntimeError(f"Failed to save chunks for page {page_id}: {e}") from e
 
     def get_scraped_page_count(self):
         """Get the number of pages scraped into the temporary tables"""
@@ -489,7 +489,7 @@ class SitemapMarkdownSpider(SitemapSpider):
             return OpenAIEmbeddingWrapper(client, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS)
 
         except Exception as e:
-            raise RuntimeError(f"Failed to initialize OpenAI embeddings: {e}")
+            raise RuntimeError(f"Failed to initialize OpenAI embeddings: {e}") from e
 
     def get_sitemap_urls(self, domain):
         """Get sitemap URLs from robots.txt, fallback to common locations"""
@@ -767,7 +767,9 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
                     )
 
             except Exception as e:
-                raise ValueError(f"Could not parse OpenAI response for {url}: {e}")
+                raise ValueError(
+                    f"Could not parse OpenAI response for {url}: {e}"
+                ) from e
 
             # Convert chunk IDs to split indices (0-based)
             chunks_to_split_after = [
@@ -812,7 +814,7 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
             return final_chunks
 
         except Exception as e:
-            raise RuntimeError(f"OpenAI semantic chunking failed for {url}: {e}")
+            raise RuntimeError(f"OpenAI semantic chunking failed for {url}: {e}") from e
 
     def chunk_markdown_content_header_based(self, markdown_text, url, heading_anchors):
         """Original header-based chunking method"""
@@ -1219,14 +1221,11 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Validate semantic chunking requirements
-    if args.chunking == "semantic":
-        if not os.getenv("OPENAI_API_KEY"):
-            print(
-                "Error: Semantic chunking requires OPENAI_API_KEY environment variable"
-            )
-            print("Set it with: export OPENAI_API_KEY=your_api_key")
-            print("Or create a .env file with: OPENAI_API_KEY=your_api_key")
-            sys.exit(1)
+    if args.chunking == "semantic" and not os.getenv("OPENAI_API_KEY"):
+        print("Error: Semantic chunking requires OPENAI_API_KEY environment variable")
+        print("Set it with: export OPENAI_API_KEY=your_api_key")
+        print("Or create a .env file with: OPENAI_API_KEY=your_api_key")
+        sys.exit(1)
 
     # Configure Scrapy settings
     settings = get_project_settings()
@@ -1333,6 +1332,6 @@ if __name__ == "__main__":
             raise
         except Exception as e:
             print(f"Failed to finish database: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
         finally:
             db_manager.close()
