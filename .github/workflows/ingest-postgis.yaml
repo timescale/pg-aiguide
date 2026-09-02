@@ -41,9 +41,12 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: ingest/uv.lock
 
       - name: Install python dependencies
-        run: uv sync
+        run: uv sync --no-dev
 
       - name: Ingest PostGIS ${{ github.event.inputs.version }} docs for dev
         run: uv run python postgis_docs.py --version ${{ github.event.inputs.version }}

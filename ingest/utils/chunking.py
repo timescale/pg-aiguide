@@ -1,6 +1,6 @@
 import math
 import re
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
 
 from ingest.constants import MAX_CHUNK_TOKENS, MIN_CHUNK_TOKENS
 from ingest.encoder import ENC
@@ -70,8 +70,10 @@ def chunk_markdown_lines(
     def flush() -> None:
         nonlocal idx
         content = "\n".join(current_chunk_lines).strip()
-        non_empty_lines = [l for l in content.splitlines() if l.strip()]
-        if content and not all(_MARKDOWN_LINK_PATTERN.match(l) for l in non_empty_lines):
+        non_empty_lines = [line for line in content.splitlines() if line.strip()]
+        if content and not all(
+            _MARKDOWN_LINK_PATTERN.match(line) for line in non_empty_lines
+        ):
             chunks.extend(
                 create_chunks(
                     idx=idx,

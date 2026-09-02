@@ -1,9 +1,8 @@
 import os
-from typing import Optional
 from urllib.parse import quote
 
 
-def build_database_uri() -> Optional[str]:
+def build_database_uri() -> str | None:
     db_url = os.environ.get("DB_URL")
     if db_url:
         return db_url

@@ -156,7 +156,11 @@ def get_postgis_page_urls(
     pages = set()
     for link in soup.find_all("a", href=True):
         href = link["href"]
-        if href.endswith(".html") and not href.startswith("http") and href not in POSTGIS_SKIP_PAGES:
+        if (
+            href.endswith(".html")
+            and not href.startswith("http")
+            and href not in POSTGIS_SKIP_PAGES
+        ):
             pages.add(href)
 
     urls = sorted(pages)

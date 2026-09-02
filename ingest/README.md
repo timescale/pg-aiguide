@@ -15,6 +15,35 @@
 uv sync
 ```
 
+## Linting and formatting
+
+Python code is formatted and linted with [`ruff`](https://docs.astral.sh/ruff/),
+configured in `pyproject.toml`. The repo-root `./check` script runs both (and
+auto-fixes what it can), so normally you just run:
+
+```bash
+./check
+```
+
+To run them directly:
+
+```bash
+uv run ruff format .            # format
+uv run ruff format --check .    # verify formatting, as CI does
+uv run ruff check .             # lint
+uv run ruff check --fix .       # lint and apply safe fixes
+```
+
+CI enforces `ruff format --check`, `ruff check`, and `uv lock --check` in the
+`Lint Python` job. `ruff` lives in the `dev` dependency group, so the ingest
+workflows install with `uv sync --no-dev`.
+
+After changing dependencies, commit the regenerated `uv.lock`, or `uv lock
+--check` will fail in CI.
+
+There is no type checker configured for this code. `ruff` is the only Python
+tool that CI enforces.
+
 ## Running the ingest
 
 ### PostgreSQL Documentation

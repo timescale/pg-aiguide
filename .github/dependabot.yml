@@ -1,0 +1,43 @@
+version: 2
+
+updates:
+  # Python ingest scripts. These deps were the source of all 30 Dependabot
+  # alerts that had to be cleared by hand in #133, so keep them updated
+  # automatically. The "uv" ecosystem understands uv.lock.
+  - package-ecosystem: uv
+    directory: /ingest
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      python-deps:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-dev-deps:
+        dependency-type: development
+        update-types: ["minor", "patch"]
+      npm-prod-deps:
+        dependency-type: production
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Workflow action versions currently drift between v4 and v5 across files.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(ci)"
