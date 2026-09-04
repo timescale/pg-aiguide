@@ -30,3 +30,15 @@
 - Add dev-only tooling to the `dev` dependency group, not `dependencies`
 - Commit the regenerated `uv.lock` whenever dependencies change; CI runs `uv lock --check`
 - Chain re-raised exceptions with `raise ... from e` to preserve the original traceback
+
+## Releasing
+
+- Release with `./bun release <version | major | minor | patch>` from a clean
+  `main`; don't create tags or releases in the GitHub UI. See DEVELOPMENT.md.
+- The script bumps the version in `package.json`,
+  `.claude-plugin/marketplace.json`, and `.cursor-plugin/plugin.json`, commits
+  `release: vX.Y.Z`, tags, and pushes. The tag push triggers
+  `.github/workflows/publish.yml`.
+- The push to `main` requires bypassing the pull-request rule. Without that
+  access the tag pushes but the commit is rejected, leaving `main` behind the
+  released version.
