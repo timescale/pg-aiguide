@@ -15,7 +15,7 @@ Migration: Add order_status column to orders table
 
 ## Step 2: Test on a Fork
 
-Fork your database using your provider's fork feature (Neon, Ghost, or dump/restore).
+Fork your database using your provider's fork feature (Neon, or dump/restore).
 
 ## Step 3: Run on Fork
 
