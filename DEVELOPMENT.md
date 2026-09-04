@@ -171,3 +171,38 @@ Create/edit the file `~/Library/Application Support/Claude/claude_desktop_config
   }
 }
 ```
+
+## Releasing
+
+Releases are cut with the release script. Don't create the tag or release in
+the GitHub UI. The version is hard-coded in `package.json`,
+`.claude-plugin/marketplace.json`, and `.cursor-plugin/plugin.json`, and npm
+rejects a publish whose `package.json` version already exists, so a tag pushed
+without the bump fails CI and burns the version number.
+
+Run `./bun i` first, then:
+
+```bash
+./bun release 0.7.0   # explicit version
+./bun release patch   # or: major | minor | patch, relative to package.json
+```
+
+The script:
+
+1. Checks that the working tree is clean, you are on `main`, local `main` is
+   not behind `origin/main`, the version is valid semver and greater than the
+   current one, and the tag does not already exist.
+2. Writes the new version into the three files above.
+3. Commits them as `release: vX.Y.Z`, creates an annotated `vX.Y.Z` tag, and
+   runs `git push --follow-tags`.
+
+The tag push triggers the Publish workflow (`.github/workflows/publish.yml`),
+which publishes to npm, Docker Hub, ghcr.io, and the MCP Registry, then posts
+to Slack. Create the GitHub Release from the existing tag afterward if you want
+release notes.
+
+**You need permission to push directly to `main`.** The repository rule
+requiring pull requests blocks the commit push but not the tag push, which
+leaves the tag published and CI running while `main` still has the old version.
+If that happens, push the local release commit to `main` with admin bypass so
+the tag's commit is on `main`.
