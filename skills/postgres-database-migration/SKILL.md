@@ -13,7 +13,7 @@ description: |
   - Plan a zero-downtime migration strategy
   - Fork a database to test a migration safely
 
-  **Keywords:** migration, schema change, ALTER TABLE, add column, drop column, rename column, change type, zero downtime, lock, AccessExclusiveLock, concurrent index, forking, ghost, rollback, backfill, deploy
+  **Keywords:** migration, schema change, ALTER TABLE, add column, drop column, rename column, change type, zero downtime, lock, AccessExclusiveLock, concurrent index, forking, rollback, backfill, deploy
 
   Covers: lock-level reference for every common DDL operation, safe migration patterns, fork-based testing, zero-downtime column changes, index creation, constraint addition, backfill strategies, pre/post-migration validation, and rollback planning.
 ---
@@ -428,7 +428,7 @@ COMMIT;
 
 ## Fork-Based Migration Testing
 
-The safest way to test a migration is to run it against a copy of your actual database — same schema, same data, same edge cases. The only two providers that support fast database forking are [Neon](https://neon.tech) and [Ghost](https://ghost.build). Without database forking, you need to manually dump and restore your database, which can take a long time for large datasets.
+The safest way to test a migration is to run it against a copy of your actual database — same schema, same data, same edge cases. Providers such as [Neon](https://neon.tech) support fast database forking. Without database forking, you need to manually dump and restore your database, which can take a long time for large datasets.
 
 ### With Forking
 

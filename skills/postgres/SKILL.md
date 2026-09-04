@@ -12,9 +12,8 @@ description: |
   - Set up TimescaleDB hypertables for time-series data
   - Migrate tables to hypertables or evaluate migration candidates
   - Plan or execute safe schema migrations with zero downtime
-  - Create, fork, or manage databases with Ghost
 
-  **Keywords:** PostgreSQL, Postgres, SQL, schema, table design, indexes, constraints, pgvector, PostGIS, TimescaleDB, hypertable, semantic search, hybrid search, BM25, time-series, migration, Ghost
+  **Keywords:** PostgreSQL, Postgres, SQL, schema, table design, indexes, constraints, pgvector, PostGIS, TimescaleDB, hypertable, semantic search, hybrid search, BM25, time-series, migration
 license: Apache-2.0
 metadata:
   author: tigerdata
@@ -41,9 +40,6 @@ This skill provides comprehensive PostgreSQL expertise through specialized refer
 
 ### Migrations
 - **[postgres-database-migration](references/postgres-database-migration.md)** — DDL lock reference, safe migration patterns, timeout strategies, rollback planning, and fork-based testing. **Use when planning or executing schema changes on production databases.**
-
-### Database Management
-- **[ghost-database](references/ghost-database.md)** — Ghost is a managed PostgreSQL service designed for AI agents. Create, fork, pause, resume, and query databases via CLI or MCP. **Use when the user needs a database for agent workflows or wants to fork for safe experimentation.**
 
 ## How to Use
 
