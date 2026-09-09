@@ -32,10 +32,10 @@
     "watch": "./bun --watch src/index.ts"
   },
   "dependencies": {
-    "@ai-sdk/openai": "4.0.53",
+    "@ai-sdk/openai": "4.0.60",
     "@opentelemetry/api": "^1.9.1",
     "@tigerdata/mcp-boilerplate": "1.6.5",
-    "ai": "7.0.87",
+    "ai": "7.0.93",
     "dotenv": "^17.4.2",
     "gray-matter": "^4.0.3",
     "migrate": "^2.1.0",
