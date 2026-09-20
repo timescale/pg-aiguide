@@ -102,7 +102,7 @@ claude plugin install pg@aiguide
 [![Install in VS Code](https://img.shields.io/badge/Install_in-VS_Code-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=pg-aiguide&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.tigerdata.com%2Fdocs%22%7D)
 [![Install in VS Code Insiders](https://img.shields.io/badge/Install_in-VS_Code_Insiders-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=pg-aiguide&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.tigerdata.com%2Fdocs%22%7D&quality=insiders)
 [![Install in Visual Studio](https://img.shields.io/badge/Install_in-Visual_Studio-C16FDE?style=flat-square&logo=visualstudio&logoColor=white)](https://vs-open.link/mcp-install?%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.tigerdata.com%2Fdocs%22%7D)
-[![Install in Goose](https://block.github.io/goose/img/extension-install-dark.svg)](https://block.github.io/goose/extension?cmd=&arg=&id=pg-aiguide&name=pg-aiguide&description=MCP%20Server%20for%20pg-aiguide)
+[![Install in Goose](https://goose-docs.ai/img/extension-install-dark.svg)](https://goose-docs.ai/extension?url=https%3A%2F%2Fmcp.tigerdata.com%2Fdocs&type=streamable_http&id=pg-aiguide&name=pg-aiguide&description=MCP%20Server%20for%20pg-aiguide)
 [![Add MCP Server pg-aiguide to LM Studio](https://files.lmstudio.ai/deeplink/mcp-install-light.svg)](https://lmstudio.ai/install-mcp?name=pg-aiguide&config=eyJuYW1lIjoicGctYWlndWlkZSIsInR5cGUiOiJodHRwIiwidXJsIjoiaHR0cHM6Ly9tY3AudGlnZXJkYXRhLmNvbS9kb2NzIn0=)
 
 <details>
