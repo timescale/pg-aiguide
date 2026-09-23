@@ -1,8 +1,7 @@
 import { cp, rm } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
-const projectRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const projectRoot = join(import.meta.dirname, '..');
 const distDir = join(projectRoot, 'dist');
 const stagedSkillsDir = join(distDir, 'skills');
 

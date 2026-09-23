@@ -24,7 +24,8 @@
     "lint": "biome check",
     "validate-skills": "./bun scripts/validate-skills.ts",
     "migrate": "migrate",
-    "prepack": "npm run build && node scripts/stage-npm-skills.mjs",
+    "prepack": "npm run build && ./bun scripts/stage-npm-skills.ts",
+    "smoke:npm": "./bun scripts/smoke-npm-package.ts",
     "start": "./bun src/index.ts",
     "typecheck": "tsc --noEmit",
     "watch": "./bun --watch src/index.ts"
@@ -42,6 +43,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.11",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/bun": "^1.4.0",
     "@types/node": "^24.13.3",
     "@types/pg": "^8.23.1",

@@ -15,3 +15,5 @@ jobs:
         run: ./bun install
       - name: Run tests
         run: ./bun test
+      - name: Smoke test packed npm MCP server
+        run: ./bun run smoke:npm
