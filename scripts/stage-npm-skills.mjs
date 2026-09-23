@@ -1,4 +1,4 @@
-import { copyFile, cp, rm } from 'node:fs/promises';
+import { cp, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,10 +13,9 @@ try {
     recursive: true,
     dereference: true,
   });
-  await copyFile(
-    join(projectRoot, 'skills.yaml'),
-    join(distDir, 'skills.yaml'),
-  );
+  // Clean up the old config if dist/ came from a build before the loader used
+  // package-relative paths; otherwise npm pack would still publish it.
+  await rm(join(distDir, 'skills.yaml'), { force: true });
 } catch (error) {
   console.error('Failed to stage skills for the npm package:', error);
   process.exitCode = 1;
