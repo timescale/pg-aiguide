@@ -24,7 +24,7 @@
     "lint": "biome check",
     "validate-skills": "./bun scripts/validate-skills.ts",
     "migrate": "migrate",
-    "prepublishOnly": "./bun run build",
+    "prepack": "npm run build && node scripts/stage-npm-skills.mjs",
     "start": "./bun src/index.ts",
     "typecheck": "tsc --noEmit",
     "watch": "./bun --watch src/index.ts"
