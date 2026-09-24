@@ -1,9 +1,13 @@
 import { cp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
+// prepack includes only dist/ in the npm tarball. Stage the skills and database
+// migrations there so a standalone npm install can load them; dereference skill
+// symlinks because npm pack omits links rather than publishing their targets.
 const projectRoot = join(import.meta.dirname, '..');
 const distDir = join(projectRoot, 'dist');
 const stagedSkillsDir = join(distDir, 'skills');
+const stagedMigrationsDir = join(distDir, 'migrations');
 
 try {
   // npm pack skips symlinks, so publish regular copies of their targets.
@@ -12,10 +16,14 @@ try {
     recursive: true,
     dereference: true,
   });
+  await rm(stagedMigrationsDir, { recursive: true, force: true });
+  await cp(join(projectRoot, 'migrations'), stagedMigrationsDir, {
+    recursive: true,
+  });
   // Clean up the old config if dist/ came from a build before the loader used
   // package-relative paths; otherwise npm pack would still publish it.
   await rm(join(distDir, 'skills.yaml'), { force: true });
 } catch (error) {
-  console.error('Failed to stage skills for the npm package:', error);
+  console.error('Failed to stage assets for the npm package:', error);
   process.exitCode = 1;
 }

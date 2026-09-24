@@ -17,3 +17,15 @@ jobs:
         run: ./bun test
       - name: Smoke test packed npm MCP server
         run: ./bun run smoke:npm
+
+  npm-migrations:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        run: ./bun install
+      - name: Build PostgreSQL test image with pgvector and pg_textsearch
+        run: docker build -f docker/test-migrations/Dockerfile -t pg-aiguide-migrations-test .
+      - name: Smoke test npm launcher with database migrations
+        run: ./bun run smoke:npm-migrations

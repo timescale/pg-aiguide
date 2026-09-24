@@ -7,6 +7,10 @@ import { promisify } from 'node:util';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
+// Test the npm artifact, not the checkout: packing must include the skill files
+// and turn the postgres umbrella skill's symlinks into real reference files.
+// Launching MCP from an unrelated directory also catches CWD-relative lookups.
+// No database is needed because this test only exercises skill capabilities.
 const execFileAsync = promisify(execFile);
 const projectRoot = join(import.meta.dirname, '..');
 const temporaryDirectory = await mkdtemp(join(tmpdir(), 'pg-aiguide-npm-'));
@@ -64,8 +68,8 @@ try {
     'the published reference must contain the original skill content',
   );
 
-  // The CLI entrypoint runs database migrations before starting MCP; test the
-  // stdio server directly until the migration packaging issue is addressed.
+  // Bypass database migrations here to keep this test fast. The separate
+  // smoke-npm-migrations test covers the normal CLI entrypoint and search.
   const transport = new StdioClientTransport({
     command: 'node',
     args: [join(installedPackage, 'dist/stdio.js')],
