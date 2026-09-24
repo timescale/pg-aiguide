@@ -58,6 +58,12 @@ Install curated PostgreSQL best-practice skills for your AI coding agent:
 npx skills add timescale/pg-aiguide --skill postgres
 ```
 
+Or install the schema exploration skill to investigate an existing PostgreSQL database:
+
+```bash
+npx skills add timescale/pg-aiguide --skill schema-exploration
+```
+
 Or pick individual skills interactively:
 
 ```bash
@@ -275,6 +281,7 @@ Once installed, pg-aiguide can answer Postgres questions or design schemas.
   Exposes curated, opinionated PostgreSQL best-practice skills used automatically by AI coding assistants.
 
   These skills provide guidance on:
+  - Exploring existing PostgreSQL schemas and objects
   - Schema design
   - Indexing strategies
   - Data types

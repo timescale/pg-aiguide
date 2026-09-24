@@ -4,6 +4,7 @@ description: |
   Use this skill for any PostgreSQL database work — table design, indexing, data types, constraints, extensions (pgvector, PostGIS, TimescaleDB), search, and migrations.
 
   **Trigger when user asks to:**
+  - Explore an existing PostgreSQL database to understand its objects and relationships
   - Design or modify PostgreSQL tables, schemas, or data models
   - Choose data types, constraints, indexes, or partitioning strategies
   - Work with pgvector embeddings, semantic search, or RAG
@@ -24,6 +25,9 @@ metadata:
 This skill provides comprehensive PostgreSQL expertise through specialized references. Load the appropriate reference based on the task.
 
 ## Available References
+
+### Existing Databases
+- **[schema-exploration](references/schema-exploration/guide.md)** — Read-only, question-driven exploration of schemas, tables, views, routines, triggers, RLS, and extensions using `pg_catalog`. **Use to understand an existing database before designing changes or writing queries.**
 
 ### Table Design
 - **[design-postgres-tables](references/design-postgres-tables.md)** — Data types, constraints, indexes, JSONB patterns, partitioning, and PostgreSQL best practices. **Use for any general table/schema design task.**
