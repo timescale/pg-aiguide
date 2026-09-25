@@ -1,7 +1,7 @@
 ---
 name: postgres
 description: |
-  Use this skill for any PostgreSQL database work — table design, indexing, data types, constraints, extensions (pgvector, PostGIS, TimescaleDB), search, and migrations.
+  Use this skill for any PostgreSQL database work — table design, indexing, data types, constraints, work queues, extensions (pgvector, PostGIS, TimescaleDB), search, and migrations.
 
   **Trigger when user asks to:**
   - Design or modify PostgreSQL tables, schemas, or data models
@@ -12,8 +12,9 @@ description: |
   - Set up TimescaleDB hypertables for time-series data
   - Migrate tables to hypertables or evaluate migration candidates
   - Plan or execute safe schema migrations with zero downtime
+  - Build or review PostgreSQL-backed work queues and application workers
 
-  **Keywords:** PostgreSQL, Postgres, SQL, schema, table design, indexes, constraints, pgvector, PostGIS, TimescaleDB, hypertable, semantic search, hybrid search, BM25, time-series, migration
+  **Keywords:** PostgreSQL, Postgres, SQL, schema, table design, indexes, constraints, work queue, SKIP LOCKED, application worker, queue consumer, pgvector, PostGIS, TimescaleDB, hypertable, semantic search, hybrid search, BM25, time-series, migration
 license: Apache-2.0
 metadata:
   author: tigerdata
@@ -37,6 +38,9 @@ This skill provides comprehensive PostgreSQL expertise through specialized refer
 - **[setup-timescaledb-hypertables](references/setup-timescaledb-hypertables.md)** — Hypertable creation, compression, retention policies, continuous aggregates, and indexes. **Use when setting up TimescaleDB from scratch.**
 - **[find-hypertable-candidates](references/find-hypertable-candidates.md)** — SQL queries to analyze existing tables and score them for hypertable conversion. **Use when evaluating which tables to migrate.**
 - **[migrate-postgres-tables-to-hypertables](references/migrate-postgres-tables-to-hypertables.md)** — Step-by-step migration: partition column selection, in-place vs blue-green, validation. **Use when executing a migration.**
+
+### Work Queues
+- **[implement-postgres-work-queues](references/implement-postgres-work-queues.md)** — Durable PostgreSQL work queues with transactional enqueueing, `SKIP LOCKED` claims, leases, stale-result fencing, retries, failure inspection, polling workers, and concurrency testing. **Use when implementing or reviewing application workers and deferred jobs backed by PostgreSQL.**
 
 ### Migrations
 - **[postgres-database-migration](references/postgres-database-migration.md)** — DDL lock reference, safe migration patterns, timeout strategies, rollback planning, and fork-based testing. **Use when planning or executing schema changes on production databases.**
