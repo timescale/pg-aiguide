@@ -1234,7 +1234,7 @@ if __name__ == "__main__":
             "USER_AGENT": args.user_agent,
             "ROBOTSTXT_OBEY": True,
             "DOWNLOAD_DELAY": args.delay,
-            "RANDOMIZE_DOWNLOAD_DELAY": True,
+            "DOWNLOAD_DELAY_JITTER": 0.5,
             "CONCURRENT_REQUESTS": args.concurrent,
             "CONCURRENT_REQUESTS_PER_DOMAIN": min(args.concurrent, 2),
             "LOG_LEVEL": args.log_level,
