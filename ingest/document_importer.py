@@ -11,7 +11,7 @@ from ingest.constants import (
     OPENAI_API_KEY,
     OPENAI_BASE_URL,
 )
-from ingest.types import Chunk, Page, PageSource
+from ingest.models import Chunk, Page, PageSource
 from ingest.utils.chunking import chunk_markdown_lines
 from ingest.utils.locking import acquire_ingest_lock
 from psycopg.sql import SQL, Identifier

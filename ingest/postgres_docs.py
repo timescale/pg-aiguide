@@ -11,7 +11,7 @@ import psycopg
 from bs4 import BeautifulSoup
 from ingest.constants import BUILD_DIR, POSTGRES_BASE_URL, THIS_DIR
 from ingest.document_importer import DocumentImporter, PageSource
-from ingest.types import Page
+from ingest.models import Page
 from ingest.utils.beautiful_soup import (
     extract_postgres_page_metadata,
     postgres_html_to_markdown,

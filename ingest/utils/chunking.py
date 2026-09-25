@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterable
 
 from ingest.constants import MAX_CHUNK_TOKENS, MIN_CHUNK_TOKENS
 from ingest.encoder import ENC
-from ingest.types import Chunk
+from ingest.models import Chunk
 
 
 def create_chunks(idx: int, header: str, header_path: str, content: str) -> list[Chunk]:

@@ -28,6 +28,7 @@ from langchain_text_splitters import (
 from markdownify import markdownify as md
 from psycopg.sql import SQL, Identifier
 from scrapy.crawler import CrawlerProcess
+from scrapy.exceptions import CloseSpider
 from scrapy.spiders import SitemapSpider
 from scrapy.utils.project import get_project_settings
 
@@ -912,8 +913,7 @@ Respond only with the IDs of the chunks where you believe a split should occur. 
             self.logger.info(
                 f"Reached maximum pages limit ({self.max_pages}), stopping crawler"
             )
-            self.crawler.engine.close_spider(self, "max_pages_reached")
-            return
+            raise CloseSpider("max_pages_reached")
 
         self.processed_urls.add(url)
         self.pages_processed += 1

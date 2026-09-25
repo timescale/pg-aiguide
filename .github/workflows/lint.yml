@@ -55,3 +55,11 @@ jobs:
 
       - name: Run ruff
         run: uv run ruff check --output-format github .
+
+      - name: Check importer startup
+        env:
+          PYTHONPATH: ..
+        run: |
+          uv run python tiger_docs.py --help
+          uv run python postgres_docs.py --help
+          uv run python postgis_docs.py --help

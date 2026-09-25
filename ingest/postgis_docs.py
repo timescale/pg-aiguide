@@ -19,7 +19,7 @@ import psycopg
 import requests
 from ingest.constants import POSTGIS_BASE_URL, POSTGIS_DOMAIN
 from ingest.document_importer import DocumentImporter, PageSource
-from ingest.types import Page
+from ingest.models import Page
 from ingest.utils.beautiful_soup import (
     clean_postgis_html,
     extract_title,
