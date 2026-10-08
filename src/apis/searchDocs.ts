@@ -34,28 +34,28 @@ const inputSchema = {
       'postgis_3.6',
     ])
     .describe(
-      'The documentation source to search. "tiger" for Tiger Cloud and TimescaleDB, "postgres" for PostgreSQL, "postgis" for PostGIS spatial extension. Specific versions provided with _X.X suffixes.',
+      'Required. The documentation source to search. "tiger" for Tiger Cloud and TimescaleDB, "postgres" for PostgreSQL, "postgis" for PostGIS spatial extension. Specific versions provided with _X.X suffixes.',
     ),
   query: z
     .string()
     .describe(
-      'The search query. Used for BM25 when keyword or hybrid search applies, and for the embedding when semantic or hybrid search applies.',
+      'Required. The search query. Used for BM25 when keyword or hybrid search applies, and for the embedding when semantic or hybrid search applies.',
     ),
   limit: z.coerce
     .number()
     .int()
-    .nullable()
+    .nullish()
     .describe(
-      `The maximum number of matches to return. Defaults to ${SEARCH_DOCS_DEFAULT_LIMIT}.`,
+      `Optional. The maximum number of matches to return. Defaults to ${SEARCH_DOCS_DEFAULT_LIMIT}.`,
     ),
   semanticWeight: z
     .number()
     .multipleOf(0.1)
     .min(0)
     .max(1)
-    .nullable()
+    .nullish()
     .describe(
-      `Controls the balance between semantic and keyword search. 0 = keyword only, 0.5 = equal mix, 1 = semantic only. Default is ${SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT} (favor semantic search).`,
+      `Optional. Controls the balance between semantic and keyword search. 0 = keyword only, 0.5 = equal mix, 1 = semantic only. Defaults to ${SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT} (favor semantic search).`,
     ),
 } as const;
 
