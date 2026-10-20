@@ -3,17 +3,12 @@ import re
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 
-import openai
 import psycopg
-from ingest.constants import (
-    EMBEDDING_DIMENSIONS,
-    EMBEDDING_MODEL,
-    OPENAI_API_KEY,
-    OPENAI_BASE_URL,
-)
+from ingest.constants import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL_ID
 from ingest.models import Chunk, Page, PageSource
 from ingest.utils.chunking import chunk_markdown_lines
 from ingest.utils.locking import acquire_ingest_lock
+from ingest.utils.openai_client import make_openai_client
 from psycopg.sql import SQL, Identifier
 
 
@@ -33,14 +28,11 @@ class DocumentImporter(ABC):
     # ------------------------------------------------------------------ #
 
     def embed(self, content: str) -> list[float] | None:
-        client_kwargs: dict = {"api_key": OPENAI_API_KEY}
-        if OPENAI_BASE_URL:
-            client_kwargs["base_url"] = OPENAI_BASE_URL
-        client = openai.OpenAI(**client_kwargs)
+        client = make_openai_client()
         try:
             return (
                 client.embeddings.create(
-                    model=EMBEDDING_MODEL,
+                    model=EMBEDDING_MODEL_ID,
                     input=content,
                     dimensions=EMBEDDING_DIMENSIONS,
                 )

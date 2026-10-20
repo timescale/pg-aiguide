@@ -11,10 +11,20 @@ BUILD_DIR = THIS_DIR / "build"
 BUILD_DIR.mkdir(exist_ok=True)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")  # Optional: custom API endpoint
-EMBEDDING_MODEL = os.getenv(
-    "EMBEDDING_MODEL", "text-embedding-3-small"
-)  # Default model
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+# Bare OpenAI model name, with any "openai/" prefix stripped so the env var can
+# be given either way. Use this for tiktoken and for logging.
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small").removeprefix(
+    "openai/"
+)
+
+# Model id to send with embedding requests. OpenRouter namespaces models by
+# upstream provider, so it needs the "openai/" prefix; OpenAI itself does not.
+EMBEDDING_MODEL_ID = (
+    f"openai/{EMBEDDING_MODEL}" if OPENROUTER_API_KEY else EMBEDDING_MODEL
+)
 
 MIN_CHUNK_TOKENS = 10  # anything less provides no value
 MAX_CHUNK_TOKENS = 8191

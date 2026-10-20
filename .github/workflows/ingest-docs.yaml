@@ -79,6 +79,7 @@ jobs:
         working-directory: ingest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       PGHOST: ${{ secrets.PGHOST }}
       PGPORT: ${{ secrets.PGPORT }}
       PGDATABASE: ${{ secrets.PGDATABASE }}
@@ -128,6 +129,7 @@ jobs:
         working-directory: ingest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       PGHOST: ${{ secrets.PROD_PGHOST }}
       PGPORT: ${{ secrets.PROD_PGPORT }}
       PGDATABASE: ${{ secrets.PROD_PGDATABASE }}

@@ -12,15 +12,11 @@ import psycopg
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
-from ingest.constants import (
-    EMBEDDING_DIMENSIONS,
-    EMBEDDING_MODEL,
-    OPENAI_API_KEY,
-    OPENAI_BASE_URL,
-)
+from ingest.constants import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL_ID
 from ingest.utils.beautiful_soup import resolve_relative_urls
 from ingest.utils.db import build_database_uri
 from ingest.utils.locking import acquire_ingest_lock
+from ingest.utils.openai_client import make_openai_client
 from langchain_text_splitters import (
     MarkdownHeaderTextSplitter,
     RecursiveCharacterTextSplitter,
@@ -457,18 +453,8 @@ class SitemapMarkdownSpider(SitemapSpider):
     def _init_default_embedding_model(self):
         """Initialize OpenAI embedding model for database storage"""
         try:
-            if not OPENAI_API_KEY:
-                raise ValueError(
-                    "OPENAI_API_KEY environment variable is required for database storage with embeddings"
-                )
-
             self.logger.info("Initializing OpenAI embedding client")
-            # Initialize client with optional custom base URL
-            client_kwargs = {"api_key": OPENAI_API_KEY}
-            if OPENAI_BASE_URL:
-                client_kwargs["base_url"] = OPENAI_BASE_URL
-                self.logger.info(f"Using custom OpenAI base URL: {OPENAI_BASE_URL}")
-            client = openai.OpenAI(**client_kwargs)
+            client = make_openai_client()
 
             # Create a simple wrapper class for the OpenAI client
             class OpenAIEmbeddingWrapper:
@@ -485,9 +471,11 @@ class SitemapMarkdownSpider(SitemapSpider):
                     return [embedding.embedding for embedding in response.data]
 
             self.logger.info(
-                f"Using embedding model: {EMBEDDING_MODEL} (dimensions: {EMBEDDING_DIMENSIONS})"
+                f"Using embedding model: {EMBEDDING_MODEL_ID} (dimensions: {EMBEDDING_DIMENSIONS})"
             )
-            return OpenAIEmbeddingWrapper(client, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS)
+            return OpenAIEmbeddingWrapper(
+                client, EMBEDDING_MODEL_ID, EMBEDDING_DIMENSIONS
+            )
 
         except Exception as e:
             raise RuntimeError(f"Failed to initialize OpenAI embeddings: {e}") from e
@@ -1258,14 +1246,9 @@ if __name__ == "__main__":
 
     if args.storage_type == "database":
         # Initialize embedding model for database storage (needed for both header and semantic)
-        # Initialize client with optional custom base URL
-        client_kwargs = {"api_key": OPENAI_API_KEY}
-        if OPENAI_BASE_URL:
-            client_kwargs["base_url"] = OPENAI_BASE_URL
-            print(f"Using custom OpenAI base URL: {OPENAI_BASE_URL}")
-        client = openai.OpenAI(**client_kwargs)
+        client = make_openai_client()
         print(
-            f"Using embedding model: {EMBEDDING_MODEL} (dimensions: {EMBEDDING_DIMENSIONS})"
+            f"Using embedding model: {EMBEDDING_MODEL_ID} (dimensions: {EMBEDDING_DIMENSIONS})"
         )
 
         # Create embedding wrapper
@@ -1282,7 +1265,7 @@ if __name__ == "__main__":
                 return [embedding.embedding for embedding in response.data]
 
         embedding_model = OpenAIEmbeddingWrapper(
-            client, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS
+            client, EMBEDDING_MODEL_ID, EMBEDDING_DIMENSIONS
         )
         db_manager = DatabaseManager(
             database_uri=args.database_uri, embedding_model=embedding_model
