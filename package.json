@@ -33,9 +33,10 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "4.0.60",
+    "@openrouter/ai-sdk-provider": "^3.1.0",
     "@opentelemetry/api": "^1.9.1",
     "@tigerdata/mcp-boilerplate": "1.6.5",
-    "ai": "7.0.93",
+    "ai": "7.0.103",
     "dotenv": "^17.4.2",
     "gray-matter": "^4.0.3",
     "migrate": "^2.1.0",

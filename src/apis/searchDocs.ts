@@ -1,7 +1,8 @@
 import { openai } from '@ai-sdk/openai';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { trace } from '@opentelemetry/api';
 import type { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
-import { embed } from 'ai';
+import { type EmbeddingModel, embed } from 'ai';
 import { z } from 'zod';
 import type { ServerContext } from '../types.js';
 import {
@@ -18,6 +19,9 @@ const ENTITY_NAME_MAPPINGS: Partial<Record<SourceType, string>> = {
 const SEARCH_DOCS_DEFAULT_LIMIT = 20;
 const SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT = 0.7;
 const SEARCH_DOCS_HYBRID_CANDIDATE_POOL_FACTOR = 4;
+const EMBEDDING_MODEL = 'text-embedding-3-small';
+
+let embeddingModel: EmbeddingModel | null = null;
 
 const inputSchema = {
   source: z
@@ -133,9 +137,28 @@ function recordTopResultsOnSpan(results: SearchResult[]): void {
   span.setAttribute('search_docs.top_results', JSON.stringify(topResults));
 }
 
+const getEmbeddingModel = () => {
+  if (embeddingModel) {
+    return embeddingModel;
+  }
+
+  if (process.env.OPENROUTER_API_KEY) {
+    const openRouterProvider = createOpenRouter({
+      apiKey: process.env.OPENROUTER_API_KEY,
+    });
+    embeddingModel = openRouterProvider.textEmbeddingModel(
+      `openai/${EMBEDDING_MODEL}`,
+    );
+  } else {
+    embeddingModel = openai.embedding(EMBEDDING_MODEL);
+  }
+
+  return embeddingModel;
+};
+
 async function embedQueryJson(query: string): Promise<string> {
   const { embedding } = await embed({
-    model: openai.embedding('text-embedding-3-small'),
+    model: getEmbeddingModel(),
     value: query,
   });
   return JSON.stringify(embedding);
