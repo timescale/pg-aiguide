@@ -16,6 +16,5 @@ export const { registerCleanupFn } = await httpServerFactory({
   context,
   apiFactories,
   promptFactories,
-  stateful: false,
   dnsRebindingProtection: !isProduction,
 });
