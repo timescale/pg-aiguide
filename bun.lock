@@ -8,7 +8,7 @@
         "@ai-sdk/openai": "4.0.60",
         "@openrouter/ai-sdk-provider": "^3.1.0",
         "@opentelemetry/api": "^1.10.0",
-        "@tigerdata/mcp-boilerplate": "2.0.0",
+        "@tigerdata/mcp-boilerplate": "2.0.1",
         "ai": "7.0.103",
         "dotenv": "^17.4.2",
         "gray-matter": "^4.0.3",
@@ -258,7 +258,7 @@
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
-    "@tigerdata/mcp-boilerplate": ["@tigerdata/mcp-boilerplate@2.0.0", "", { "dependencies": { "@mcp-use/inspector": "^20.3.23", "@modelcontextprotocol/node": "^2.1.1", "@modelcontextprotocol/server": "^2.3.1", "@opentelemetry/api": "^1.10.0", "@opentelemetry/auto-instrumentations-node": "^0.82.0", "@opentelemetry/exporter-logs-otlp-http": "^0.300.0", "@opentelemetry/exporter-trace-otlp-grpc": "^0.300.0", "@opentelemetry/exporter-trace-otlp-http": "^0.300.0", "@opentelemetry/instrumentation": "^0.300.0", "@opentelemetry/resources": "^3.0.0", "@opentelemetry/sdk-logs": "^3.0.0", "@opentelemetry/sdk-node": "^0.300.0", "@opentelemetry/sdk-trace": "^3.0.0", "@opentelemetry/semantic-conventions": "^1.43.0", "@toon-format/toon": "^4.4.0", "escape-html": "^1.0.3", "express": "^5.3.0", "gray-matter": "^4.0.3", "yaml": "^2.9.1" }, "peerDependencies": { "migrate": "^2.1.0", "pg": "^8.16.3", "zod": "^4.2.0" }, "optionalPeers": ["migrate", "pg"] }, "sha512-Ylr6OUo1lGGqlTPCoZs2x8TE1atfnBXeUFcFc4RAXMIiRtMLOxvNVI5/av0UpBB/zNVtJs8KLr8ZFHm2ondFVQ=="],
+    "@tigerdata/mcp-boilerplate": ["@tigerdata/mcp-boilerplate@2.0.1", "", { "dependencies": { "@mcp-use/inspector": "^20.3.23", "@modelcontextprotocol/node": "^2.1.1", "@modelcontextprotocol/server": "^2.3.1", "@opentelemetry/api": "^1.10.0", "@opentelemetry/auto-instrumentations-node": "^0.82.0", "@opentelemetry/exporter-logs-otlp-http": "^0.300.0", "@opentelemetry/exporter-trace-otlp-grpc": "^0.300.0", "@opentelemetry/exporter-trace-otlp-http": "^0.300.0", "@opentelemetry/instrumentation": "^0.300.0", "@opentelemetry/resources": "^3.0.0", "@opentelemetry/sdk-logs": "^3.0.0", "@opentelemetry/sdk-node": "^0.300.0", "@opentelemetry/sdk-trace": "^3.0.0", "@opentelemetry/semantic-conventions": "^1.43.0", "@toon-format/toon": "^4.4.0", "escape-html": "^1.0.3", "express": "^5.3.0", "gray-matter": "^4.0.3", "yaml": "^2.9.1" }, "peerDependencies": { "migrate": "^2.1.0", "pg": "^8.16.3", "zod": "^4.2.0" }, "optionalPeers": ["migrate", "pg"] }, "sha512-B3fMHal1OUVyhwlvuqOfC6cN+E9cXWikJLZ2sZbHRi+A3wVn33kqmZqbTLClRkg12ewsXI2OVes5y4Sx5Khb9g=="],
 
     "@toon-format/toon": ["@toon-format/toon@4.4.0", "", {}, "sha512-A6UcsVoWbNdhdLNhJbe6JpRlocmf/DZGG57fur3bd8oQtsjBaKWo2hHbOU2zTuy+byUmLIOyP1xJeitopCZzpQ=="],
 
