@@ -33,32 +33,46 @@ CREATE TABLE migration_progress (
 
 INSERT INTO migration_progress (migration_name) VALUES ('backfill_amount_new');
 
--- Run in a loop (from application code or script):
+-- Run as a top-level DO block. The COMMIT below is transaction control, which PL/pgSQL
+-- only allows in a top-level DO, or in a procedure called by a matching top-level CALL
+-- (PostgreSQL 11+). Wrapping the block in BEGIN/COMMIT makes those COMMITs fail.
 DO $$
 DECLARE
     v_batch_size CONSTANT INTEGER := 10000;
     v_last_id BIGINT;
+    v_batch_max_id BIGINT;
     v_rows INTEGER;
 BEGIN
     SELECT last_processed_id INTO v_last_id
     FROM migration_progress WHERE migration_name = 'backfill_amount_new';
 
     LOOP
+        -- Take the next v_batch_size keys that exist, rather than an arithmetic range.
+        SELECT max(id) INTO v_batch_max_id
+        FROM (
+            SELECT id FROM orders
+            WHERE id > v_last_id
+            ORDER BY id
+            LIMIT v_batch_size
+        ) batch;
+
+        -- No keys ahead of the checkpoint: the backfill is done.
+        EXIT WHEN v_batch_max_id IS NULL;
+
         UPDATE orders
         SET amount_new = amount::NUMERIC(12,2)
-        WHERE id > v_last_id AND id <= v_last_id + v_batch_size
+        WHERE id > v_last_id AND id <= v_batch_max_id
           AND amount_new IS NULL;
 
         GET DIAGNOSTICS v_rows = ROW_COUNT;
-        EXIT WHEN v_rows = 0;
-
-        v_last_id := v_last_id + v_batch_size;
 
         UPDATE migration_progress
-        SET last_processed_id = v_last_id,
+        SET last_processed_id = v_batch_max_id,
             rows_updated = rows_updated + v_rows,
             updated_at = now()
         WHERE migration_name = 'backfill_amount_new';
+
+        v_last_id := v_batch_max_id;
 
         COMMIT;
         -- Yields to other transactions between batches
@@ -67,6 +81,8 @@ BEGIN
 END;
 $$;
 ```
+
+Advance the checkpoint to the highest key you actually saw, never to `last_id + batch_size`: primary keys are not guaranteed to be dense, so an arithmetic window can land entirely in a gap and end the backfill while higher keys still need work. For the same reason, do not use the updated-row count as the loop condition — a batch whose rows already carry the target value updates zero rows without being the last one.
 
 ## Backfill Considerations
 
