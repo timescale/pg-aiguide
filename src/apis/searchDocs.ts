@@ -52,7 +52,7 @@ const inputSchema = {
     .describe(
       `The maximum number of matches to return. Defaults to ${SEARCH_DOCS_DEFAULT_LIMIT}.`,
     ),
-  semanticWeight: z
+  semanticWeight: z.coerce
     .number()
     .multipleOf(0.1)
     .min(0)

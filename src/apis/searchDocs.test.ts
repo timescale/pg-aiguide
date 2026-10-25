@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import type { McpFeatureFlags } from '@tigerdata/mcp-boilerplate';
 import type { Pool } from 'pg';
+import { z } from 'zod';
 
 const flags = {} as McpFeatureFlags;
 
@@ -17,6 +18,16 @@ function poolMock(
     query: (sql: string, params: unknown[]) =>
       Promise.resolve(onQuery(sql, params)),
   } as unknown as Pool;
+}
+
+async function inputSchema() {
+  const def = await Promise.resolve(
+    searchDocsFactory(
+      { pgPool: poolMock(() => ({ rows: [] })), schema: 'doc' },
+      flags,
+    ),
+  );
+  return z.object(def.config.inputSchema);
 }
 
 async function invoke(pool: Pool, args: Record<string, unknown>) {
@@ -194,6 +205,35 @@ describe('search_docs — defaults and empty-like inputs', () => {
     });
 
     expect(keywordLimit).toBe(DEFAULT_LIMIT * HYBRID_POOL_FACTOR);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// REST API query strings (the GET route passes every value as a string)
+// ---------------------------------------------------------------------------
+
+describe('search_docs — REST query-string inputs', () => {
+  test('coerces string limit and semanticWeight', async () => {
+    const Input = await inputSchema();
+    const parsed = Input.parse({
+      source: 'postgres_17',
+      query: 'index',
+      limit: '5',
+      semanticWeight: '0.5',
+    });
+    expect(parsed.limit).toBe(5);
+    expect(parsed.semanticWeight).toBe(0.5);
+  });
+
+  test('rejects out-of-range string semanticWeight', async () => {
+    const Input = await inputSchema();
+    const result = Input.safeParse({
+      source: 'postgres_17',
+      query: 'index',
+      limit: '5',
+      semanticWeight: '1.5',
+    });
+    expect(result.success).toBe(false);
   });
 });
 
