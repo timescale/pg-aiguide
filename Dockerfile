@@ -1,4 +1,4 @@
-FROM oven/bun:1.4.0
+FROM oven/bun:1.4.4
 LABEL io.modelcontextprotocol.server.name="io.github.timescale/pg-aiguide"
 
 WORKDIR /app
