@@ -1,4 +1,4 @@
-FROM pgvector/pgvector:0.8.6-pg18-trixie
+FROM pgvector/pgvector:0.8.7-pg18-trixie
 
 ARG TARGETARCH
 ARG PG_TEXTSEARCH_VERSION=1.4.0
