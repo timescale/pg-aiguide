@@ -37,7 +37,7 @@
     "@opentelemetry/api": "^1.10.0",
     "@tigerdata/mcp-boilerplate": "2.0.1",
     "ai": "7.0.103",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.0",
     "gray-matter": "^4.0.3",
     "migrate": "^2.1.0",
     "pg": "^8.23.0",
