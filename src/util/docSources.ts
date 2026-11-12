@@ -2,7 +2,7 @@
  * Documentation sources and the opaque ids the navigation tools hand out.
  *
  * A search hit, a section and a page each get a string id that names its
- * source, so a follow-up call (get_surrounding_chunks, get_section, get_page)
+ * source, so a follow-up call (get_section, get_page)
  * needs only the id and never a separate `source` argument:
  *
  *   tiger:chunk:4483        one stored chunk

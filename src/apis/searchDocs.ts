@@ -85,7 +85,7 @@ const zBaseResult = z.object({
   chunk_id: z
     .string()
     .describe(
-      'Id of this chunk for get_surrounding_chunks (the chunks before and after it).',
+      'Id of this chunk. get_section also takes it and returns the section the chunk is in.',
     ),
   section_id: z
     .string()
@@ -232,7 +232,7 @@ export const searchDocsFactory: ApiFactory<
     title: 'Search Documentation',
     description: `Search documentation with hybrid semantic (vector) and keyword (BM25) search. Use semanticWeight to choose keyword-only (0), semantic-only (1), or a blend; mid values fuse rankings with RRF. Supports Tiger Cloud (TimescaleDB), PostgreSQL, and PostGIS.
 
-A hit is one chunk of a page, often part of a larger section: a table row without its header, one step of a procedure. Before answering from a hit, read it in context: get_section with the hit's section_id returns the whole section, get_surrounding_chunks with its chunk_id returns the chunks before and after it, and get_page with its page_id lists the page's sections. For exact figures (limits, prices, plan features) prefer keyword-heavy searches (semanticWeight 0–0.3) that use the words the docs would use.`,
+A hit is one chunk of a page, often part of a larger section: a table row without its header, one step of a procedure. Before answering from a hit, read it in context: get_section with the hit's section_id (or chunk_id) returns the whole section, and get_page with its page_id lists the page's sections. For exact figures (limits, prices, plan features) prefer keyword-heavy searches (semanticWeight 0–0.3) that use the words the docs would use.`,
     inputSchema,
     outputSchema,
     annotations: {

@@ -317,6 +317,46 @@ export const subsectionsOf = (
 export const headingTexts = (headings: Heading[]): string[] =>
   headings.map((h) => h.text);
 
+/** Where a cut before `max` should fall: a paragraph break, else a line break, else `max`. */
+const cutPoint = (text: string, max: number): number => {
+  const floor = Math.floor(max / 2);
+  const paragraph = text.lastIndexOf('\n\n', max);
+  if (paragraph >= floor) return paragraph;
+  const line = text.lastIndexOf('\n', max);
+  if (line >= floor) return line;
+  return max;
+};
+
+/**
+ * Splits text into parts of at most `max` characters, at paragraph breaks
+ * where possible, so a very large section (a whole Postgres reference page)
+ * can be returned a part at a time. Returns `[text]` when it fits.
+ */
+export const splitIntoParts = (text: string, max: number): string[] => {
+  const parts: string[] = [];
+  let rest = text;
+  while (rest.length > max) {
+    const at = cutPoint(rest, max);
+    parts.push(rest.slice(0, at).trimEnd());
+    rest = rest.slice(at).replace(/^\n+/, '');
+  }
+  if (rest || !parts.length) parts.push(rest);
+  return parts;
+};
+
+/**
+ * The index of the part that holds `body`'s text, found by a probe from its
+ * middle (a Tiger chunk opens with text it shares with the previous chunk).
+ */
+export const partContaining = (parts: string[], body: string): number => {
+  const trimmed = body.trim();
+  const from = trimmed.length > 800 ? 400 : 0;
+  const probe = trimmed.slice(from, from + 120);
+  if (!probe) return 0;
+  const at = parts.findIndex((p) => p.includes(probe));
+  return at < 0 ? 0 : at;
+};
+
 export type LoadPageContext = {
   pgPool: Pool;
   schema: string;

@@ -5,7 +5,9 @@ import {
   headingsOf,
   joinSubChunks,
   overlapLength,
+  partContaining,
   renderSections,
+  splitIntoParts,
   stripBreadcrumb,
   subsectionsOf,
 } from './docPages.js';
@@ -193,5 +195,41 @@ describe('assemblePage — header_path sources', () => {
     expect(doc.sections[0]?.body).toBe(
       '# CREATE INDEX\n\nCREATE INDEX constructs an index on the specified column(s).',
     );
+  });
+});
+
+describe('splitIntoParts', () => {
+  test('returns the text whole when it fits', () => {
+    expect(splitIntoParts('short', 100)).toEqual(['short']);
+    expect(splitIntoParts('', 100)).toEqual(['']);
+  });
+
+  test('cuts at paragraph breaks, under the limit', () => {
+    const paras = Array.from(
+      { length: 10 },
+      (_, i) => `para ${i} ${'x'.repeat(30)}`,
+    );
+    const parts = splitIntoParts(paras.join('\n\n'), 100);
+    expect(parts.length).toBeGreaterThan(1);
+    for (const part of parts) expect(part.length).toBeLessThanOrEqual(100);
+    expect(parts.join('\n\n')).toBe(paras.join('\n\n'));
+  });
+
+  test('cuts hard when there is no break', () => {
+    expect(splitIntoParts('a'.repeat(250), 100).map((p) => p.length)).toEqual([
+      100, 100, 50,
+    ]);
+  });
+});
+
+describe('partContaining', () => {
+  const parts = ['first part about tables', 'second part about indexes'];
+
+  test('finds the part holding a chunk body', () => {
+    expect(partContaining(parts, 'part about indexes')).toBe(1);
+  });
+
+  test('falls back to the first part', () => {
+    expect(partContaining(parts, 'not there')).toBe(0);
   });
 });
