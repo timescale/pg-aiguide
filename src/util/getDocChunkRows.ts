@@ -10,19 +10,18 @@ export type GetDocChunkRowsContext = {
   limit: number;
 };
 
-export type SemanticChunkRow = {
+type ChunkRowBase = {
   id: number;
+  page_id: number;
+  chunk_index: number;
+  sub_chunk_index: number;
   content: string;
   metadata: string;
-  distance: number;
 };
 
-export type KeywordChunkRow = {
-  id: number;
-  content: string;
-  metadata: string;
-  score: number;
-};
+export type SemanticChunkRow = ChunkRowBase & { distance: number };
+
+export type KeywordChunkRow = ChunkRowBase & { score: number };
 
 export async function getDocChunkRows(
   ctx: GetDocChunkRowsContext,
@@ -38,6 +37,9 @@ export async function getDocChunkRows(
   const sql = /* sql */ `
         SELECT
           c.id::int,
+          c.page_id::int,
+          c.chunk_index::int,
+          c.sub_chunk_index::int,
           c.content,
           c.metadata::text,
           ${

@@ -30,6 +30,9 @@ describe('getDocChunkRows', () => {
     expect(sql).toBe(`
         SELECT
           c.id::int,
+          c.page_id::int,
+          c.chunk_index::int,
+          c.sub_chunk_index::int,
           c.content,
           c.metadata::text,
           c.embedding <=> $1::vector(1536) AS distance
@@ -58,6 +61,9 @@ describe('getDocChunkRows', () => {
     expect(sql).toBe(`
         SELECT
           c.id::int,
+          c.page_id::int,
+          c.chunk_index::int,
+          c.sub_chunk_index::int,
           c.content,
           c.metadata::text,
           c.embedding <=> $1::vector(1536) AS distance
@@ -87,6 +93,9 @@ describe('getDocChunkRows', () => {
     expect(sql).toBe(`
         SELECT
           c.id::int,
+          c.page_id::int,
+          c.chunk_index::int,
+          c.sub_chunk_index::int,
           c.content,
           c.metadata::text,
             -(c.content <@> to_bm25query($1, 'doc.postgres_chunks_content_idx')) as score
@@ -115,6 +124,9 @@ describe('getDocChunkRows', () => {
     expect(sql).toBe(`
         SELECT
           c.id::int,
+          c.page_id::int,
+          c.chunk_index::int,
+          c.sub_chunk_index::int,
           c.content,
           c.metadata::text,
             -(c.content <@> to_bm25query($1, 'doc.postgres_chunks_content_idx')) as score
