@@ -97,6 +97,30 @@
         "!**/node_modules/**"
       ],
       "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      // Starts the HTTP server without index.js, which always runs
+      // migrations first. Every transaction is read-only, so this is safe to
+      // point at a shared or production database.
+      "name": "pg-aiguide MCP Server (http, read-only, no migrations)",
+      "type": "node",
+      "request": "launch",
+      "preLaunchTask": "pg-aiguide MCP - Build Only",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--enable-source-maps"],
+      "program": "${workspaceFolder}/dist/httpServer.js",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "env": { "PGOPTIONS": "-c default_transaction_read_only=on" },
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/dist/**/*.js", "!**/node_modules/**"],
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
     }
   ]
 }

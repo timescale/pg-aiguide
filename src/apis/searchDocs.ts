@@ -85,16 +85,16 @@ const zBaseResult = z.object({
   chunk_id: z
     .string()
     .describe(
-      'Id of this chunk. get_section also takes it and returns the section the chunk is in.',
+      'Id of this chunk. Pass it to get_context to read the whole section the chunk is in.',
     ),
   section_id: z
     .string()
-    .describe(
-      'Id of the section this chunk is part of, for get_section (the whole section).',
-    ),
+    .describe('Id of the section this chunk is part of (get_context).'),
   page_id: z
     .string()
-    .describe('Id of the page this chunk is on, for get_page (its outline).'),
+    .describe(
+      'Id of the page this chunk is on (get_context: the page and its outline).',
+    ),
   headings: z
     .array(z.string())
     .describe('Heading path of the section, page title first.'),
@@ -232,7 +232,7 @@ export const searchDocsFactory: ApiFactory<
     title: 'Search Documentation',
     description: `Search documentation with hybrid semantic (vector) and keyword (BM25) search. Use semanticWeight to choose keyword-only (0), semantic-only (1), or a blend; mid values fuse rankings with RRF. Supports Tiger Cloud (TimescaleDB), PostgreSQL, and PostGIS.
 
-A hit is one chunk of a page, often part of a larger section: a table row without its header, one step of a procedure. Before answering from a hit, read it in context: get_section with the hit's section_id (or chunk_id) returns the whole section, and get_page with its page_id lists the page's sections. For exact figures (limits, prices, plan features) prefer keyword-heavy searches (semanticWeight 0–0.3) that use the words the docs would use.`,
+A hit is one chunk of a page, often part of a larger section: a table row without its header, one step of a procedure. Before answering from a hit, read it in context: get_context with the hit's chunk_id returns the whole section it is in, and from there its parent section, the page and the page's outline. For exact figures (limits, prices, plan features) prefer keyword-heavy searches (semanticWeight 0–0.3) that use the words the docs would use.`,
     inputSchema,
     outputSchema,
     annotations: {

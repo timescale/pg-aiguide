@@ -2,7 +2,7 @@
  * Documentation sources and the opaque ids the navigation tools hand out.
  *
  * A search hit, a section and a page each get a string id that names its
- * source, so a follow-up call (get_section, get_page)
+ * source, so a follow-up call (get_context)
  * needs only the id and never a separate `source` argument:
  *
  *   tiger:chunk:4483        one stored chunk
@@ -95,7 +95,7 @@ export const expectDocId = <K extends ParsedId['kind']>(
 };
 
 /**
- * Which source a docs URL belongs to, by host. Used by get_page when it is
+ * Which source a docs URL belongs to, by host. Used by get_context when it is
  * given a URL instead of a page id.
  */
 export const sourceOfUrl = (url: string): DocSource | null => {

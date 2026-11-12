@@ -1,7 +1,6 @@
 import { createViewSkillToolFactory } from '@tigerdata/mcp-boilerplate/skills';
 import { parseFeatureFlags } from '../util/featureFlags.js';
-import { getPageFactory } from './getPage.js';
-import { getSectionFactory } from './getSection.js';
+import { getContextFactory } from './getContext.js';
 import { searchDocsFactory } from './searchDocs.js';
 
 export const apiFactories = [
@@ -13,6 +12,5 @@ export const apiFactories = [
       'Retrieve detailed skills for TimescaleDB operations and best practices.',
     disabled: (_, { query }) => !parseFeatureFlags(query).mcpSkillsEnabled,
   }),
-  getSectionFactory,
-  getPageFactory,
+  getContextFactory,
 ] as const;
