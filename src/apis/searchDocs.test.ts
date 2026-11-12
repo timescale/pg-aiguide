@@ -204,7 +204,21 @@ describe('search_docs — defaults and empty-like inputs', () => {
 describe('search_docs — keyword', () => {
   test('returns rows from Postgres', async () => {
     const pool = poolMock(() => ({
-      rows: [{ id: 1, content: 'x', metadata: '{}', score: 1.5 }],
+      rows: [
+        {
+          id: 1,
+          page_id: 9,
+          chunk_index: 4,
+          sub_chunk_index: 1,
+          content: 'x',
+          metadata: JSON.stringify({
+            'Header 1': 'Billing',
+            'Header 2': 'Features',
+            source_url: 'https://x/docs/billing#features',
+          }),
+          score: 1.5,
+        },
+      ],
     }));
     const out = (await invoke(pool, {
       source: 'tiger',
@@ -214,7 +228,18 @@ describe('search_docs — keyword', () => {
     })) as { results: unknown[] };
 
     expect(out.results).toEqual([
-      { id: 1, content: 'x', metadata: '{}', score: 1.5 },
+      {
+        id: 1,
+        content: 'x',
+        metadata:
+          '{"Header 1":"Billing","Header 2":"Features","source_url":"https://x/docs/billing#features"}',
+        score: 1.5,
+        chunk_id: 'tiger:chunk:1',
+        section_id: 'tiger:section:9.4',
+        page_id: 'tiger:page:9',
+        headings: ['Billing', 'Features'],
+        url: 'https://x/docs/billing#features',
+      },
     ]);
   });
 

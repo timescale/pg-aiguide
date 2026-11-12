@@ -5,16 +5,24 @@ import type { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
 import { type EmbeddingModel, embed } from 'ai';
 import { z } from 'zod';
 import type { ServerContext } from '../types.js';
+import { headingsOf, headingTexts, parseMetadata } from '../util/docPages.js';
+import {
+  chunkIdOf,
+  type DocSource,
+  entityPrefixOf,
+  pageIdOf,
+  parseSearchSource,
+  sectionIdOf,
+} from '../util/docSources.js';
+import type {
+  KeywordChunkRow,
+  SemanticChunkRow,
+} from '../util/getDocChunkRows.js';
 import {
   type GetDocChunkRowsContext,
   getDocChunkRows,
 } from '../util/getDocChunkRows.js';
 import { rrf } from '../util/rrf.js';
-
-type SourceType = 'tiger' | 'postgres' | 'postgis';
-const ENTITY_NAME_MAPPINGS: Partial<Record<SourceType, string>> = {
-  tiger: 'timescale',
-};
 
 const SEARCH_DOCS_DEFAULT_LIMIT = 20;
 const SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT = 0.7;
@@ -74,6 +82,23 @@ const zBaseResult = z.object({
     .describe(
       'Additional metadata about the documentation entry, as a JSON encoded string.',
     ),
+  chunk_id: z
+    .string()
+    .describe(
+      'Id of this chunk. Pass it to get_context to read the whole section the chunk is in.',
+    ),
+  section_id: z
+    .string()
+    .describe('Id of the section this chunk is part of (get_context).'),
+  page_id: z
+    .string()
+    .describe(
+      'Id of the page this chunk is on (get_context: the page and its outline).',
+    ),
+  headings: z
+    .array(z.string())
+    .describe('Heading path of the section, page title first.'),
+  url: z.string().nullable().describe('Link to the section on the docs site.'),
 });
 
 const zSemanticResult = zBaseResult.extend({
@@ -111,6 +136,36 @@ const outputSchema = {
 type OutputSchema = InferSchema<typeof outputSchema>;
 
 type SearchResult = SemanticResult | KeywordResult | HybridResult;
+
+type NavigationFields = Pick<
+  SearchResult,
+  'chunk_id' | 'section_id' | 'page_id' | 'headings' | 'url'
+>;
+
+/** The ids and headings a hit needs for the follow-up tools. */
+function navigationOf(
+  source: DocSource,
+  row: Pick<SemanticChunkRow, 'id' | 'page_id' | 'chunk_index' | 'metadata'>,
+): NavigationFields {
+  const metadata = parseMetadata(row.metadata);
+  const sourceUrl = metadata.source_url;
+  return {
+    chunk_id: chunkIdOf(source, row.id),
+    section_id: sectionIdOf(source, row.page_id, row.chunk_index),
+    page_id: pageIdOf(source, row.page_id),
+    headings: headingTexts(headingsOf(metadata)),
+    url: typeof sourceUrl === 'string' ? sourceUrl : null,
+  };
+}
+
+/** Drops the row's positional columns, which the ids already carry. */
+function withNavigation<R extends SemanticChunkRow | KeywordChunkRow>(
+  source: DocSource,
+  row: R,
+): Omit<R, 'page_id' | 'chunk_index' | 'sub_chunk_index'> & NavigationFields {
+  const { page_id, chunk_index, sub_chunk_index, ...rest } = row;
+  return { ...rest, ...navigationOf(source, row) };
+}
 
 const SEARCH_DOCS_SPAN_TOP_RESULT_COUNT = 3;
 
@@ -175,8 +230,9 @@ export const searchDocsFactory: ApiFactory<
   route: '/search-docs',
   config: {
     title: 'Search Documentation',
-    description:
-      'Search documentation with hybrid semantic (vector) and keyword (BM25) search. Use semanticWeight to choose keyword-only (0), semantic-only (1), or a blend; mid values fuse rankings with RRF. Supports Tiger Cloud (TimescaleDB), PostgreSQL, and PostGIS.',
+    description: `Search documentation with hybrid semantic (vector) and keyword (BM25) search. Use semanticWeight to choose keyword-only (0), semantic-only (1), or a blend; mid values fuse rankings with RRF. Supports Tiger Cloud (TimescaleDB), PostgreSQL, and PostGIS.
+
+A hit is one chunk of a page, often part of a larger section: a table row without its header, one step of a procedure. Before answering from a hit, read it in context: get_context with the hit's chunk_id returns the whole section it is in, and from there its parent section, the page and the page's outline. For exact figures (limits, prices, plan features) prefer keyword-heavy searches (semanticWeight 0–0.3) that use the words the docs would use.`,
     inputSchema,
     outputSchema,
     annotations: {
@@ -198,10 +254,8 @@ export const searchDocsFactory: ApiFactory<
     if (!query.trim()) {
       throw new Error('Query must be a non-empty string.');
     }
-    const [source, version = null] = passedSource.split('_');
-    if (!source) throw new Error('Invalid source');
-
-    const entityPrefix = ENTITY_NAME_MAPPINGS[source as SourceType] ?? source;
+    const { source, version } = parseSearchSource(passedSource);
+    const entityPrefix = entityPrefixOf(source);
 
     const chunkRowsCtx: GetDocChunkRowsContext = {
       pgPool,
@@ -217,18 +271,24 @@ export const searchDocsFactory: ApiFactory<
       passedSemanticWeight ?? SEARCH_DOCS_DEFAULT_SEMANTIC_WEIGHT;
 
     if (semanticWeight === 0) {
-      const results = (await getDocChunkRows(chunkRowsCtx)) as KeywordResult[];
+      const rows = (await getDocChunkRows(chunkRowsCtx)) as KeywordChunkRow[];
+      const results: KeywordResult[] = rows.map((r) =>
+        withNavigation(source, r),
+      );
       recordTopResultsOnSpan(results);
       return { results };
     }
 
     if (semanticWeight === 1) {
       const searchParam = await embedQueryJson(query);
-      const results = (await getDocChunkRows({
+      const rows = (await getDocChunkRows({
         ...chunkRowsCtx,
         semantic: true,
         searchParam,
-      })) as SemanticResult[];
+      })) as SemanticChunkRow[];
+      const results: SemanticResult[] = rows.map((r) =>
+        withNavigation(source, r),
+      );
       recordTopResultsOnSpan(results);
       return { results };
     }
@@ -256,13 +316,8 @@ export const searchDocsFactory: ApiFactory<
       semanticWeight,
     });
 
-    const byId = new Map<number, { content: string; metadata: string }>();
-    for (const r of [...semanticRows, ...keywordRows]) {
-      byId.set(r.id, {
-        content: r.content,
-        metadata: r.metadata ?? '',
-      });
-    }
+    const byId = new Map<number, SemanticChunkRow | KeywordChunkRow>();
+    for (const r of [...semanticRows, ...keywordRows]) byId.set(r.id, r);
 
     const results: HybridResult[] = top.map(({ id, rrf_score }) => {
       const row = byId.get(id);
@@ -270,7 +325,8 @@ export const searchDocsFactory: ApiFactory<
       return {
         id,
         content: row.content,
-        metadata: row.metadata,
+        metadata: row.metadata ?? '',
+        ...navigationOf(source, row),
         rrf_score,
       };
     });
