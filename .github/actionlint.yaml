@@ -1,0 +1,4 @@
+self-hosted-runner:
+  # RunsOn fleet labels (runs-on/fleet=<fleet>/env=ue1)
+  labels:
+    - runs-on/fleet=*/env=ue1
