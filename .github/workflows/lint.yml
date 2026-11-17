@@ -8,9 +8,12 @@ on:
 jobs:
   lint:
     name: Lint TypeScript
-    runs-on: ubuntu-latest
+    # PRs from forks stay on GitHub-hosted runners so outside code never runs in the CI account.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'runs-on/fleet=linux-2cpu-x64/env=ue1' }}
 
     steps:
+      - uses: runs-on/action@284bff869d4a825f778ac7c38e50f1e31ef198fd # v2.6.0
+        if: ${{ !github.event.pull_request.head.repo.fork }}
       - uses: actions/checkout@v7
       - name: Install dependencies
         run: ./bun install
@@ -23,12 +26,15 @@ jobs:
 
   lint-python:
     name: Lint Python
-    runs-on: ubuntu-latest
+    # PRs from forks stay on GitHub-hosted runners so outside code never runs in the CI account.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'runs-on/fleet=linux-2cpu-x64/env=ue1' }}
     defaults:
       run:
         working-directory: ingest
 
     steps:
+      - uses: runs-on/action@284bff869d4a825f778ac7c38e50f1e31ef198fd # v2.6.0
+        if: ${{ !github.event.pull_request.head.repo.fork }}
       - uses: actions/checkout@v7
 
       - name: Set up Python

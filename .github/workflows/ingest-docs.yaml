@@ -43,10 +43,11 @@ concurrency:
 jobs:
   plan:
     name: Plan ingest matrix
-    runs-on: ubuntu-latest
+    runs-on: runs-on/fleet=linux-2cpu-x64/env=ue1
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
+      - uses: runs-on/action@284bff869d4a825f778ac7c38e50f1e31ef198fd # v2.6.0
       - uses: actions/checkout@v7
 
       - name: Build matrix
@@ -68,7 +69,7 @@ jobs:
     name: Ingest ${{ matrix.label }} (dev)
     needs: plan
     if: ${{ (inputs.environment || 'both') != 'prod' }}
-    runs-on: ubuntu-latest
+    runs-on: runs-on/fleet=linux-2cpu-x64/env=ue1
     strategy:
       max-parallel: 1
       fail-fast: false
@@ -86,6 +87,7 @@ jobs:
       PGUSER: ${{ secrets.PGUSER }}
       PGPASSWORD: ${{ secrets.PGPASSWORD }}
     steps: &ingest-steps
+      - uses: runs-on/action@284bff869d4a825f778ac7c38e50f1e31ef198fd # v2.6.0
       - uses: actions/checkout@v7
 
       - name: Set up Python
@@ -118,7 +120,7 @@ jobs:
     name: Ingest ${{ matrix.label }} (prod)
     needs: plan
     if: ${{ (inputs.environment || 'both') != 'dev' }}
-    runs-on: ubuntu-latest
+    runs-on: runs-on/fleet=linux-2cpu-x64/env=ue1
     strategy:
       max-parallel: 1
       fail-fast: false
